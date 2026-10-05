@@ -881,7 +881,7 @@ object LocalProxyManager {
                     MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                     arrayOf(MediaStore.MediaColumns._ID),
                     "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
-                    arrayOf("Spotilol_CA.pem"),
+                    arrayOf("SpotiOS_CA.pem"),
                     null
                 )?.use { cursor ->
                     val stale = mutableListOf<Long>()
@@ -897,7 +897,7 @@ object LocalProxyManager {
                 }
             } catch (_: Exception) {}
 
-            var displayName = "Spotilol_CA.pem"
+            var displayName = "SpotiOS_CA.pem"
             var uri = try {
                 resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, pendingValues(displayName))
             } catch (_: Exception) { null }
@@ -905,7 +905,7 @@ object LocalProxyManager {
             if (uri == null) {
                 // Canonical name is stuck behind an undeletable orphan -
                 // export under a unique name instead of failing.
-                displayName = "Spotilol_CA_${System.currentTimeMillis()}.pem"
+                displayName = "SpotiOS_CA_${System.currentTimeMillis()}.pem"
                 uri = try {
                     resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, pendingValues(displayName))
                 } catch (_: Exception) { null }
@@ -948,7 +948,7 @@ object LocalProxyManager {
     private fun exportToFileDir(context: Context, pem: String): String {
         return try {
             val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-            val file = File(dir, "Spotilol_CA.pem")
+            val file = File(dir, "SpotiOS_CA.pem")
             file.writeText(pem)
             file.absolutePath
         } catch (e: Exception) {

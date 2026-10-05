@@ -40,7 +40,7 @@ object WorkerNeutralize {
             if(navigator.serviceWorker){
                 try {
                     navigator.serviceWorker.register = function(){
-                        return Promise.reject(new Error('SW blocked by Spotilol'));
+                        return Promise.reject(new Error('SW blocked by SpotiOS'));
                     };
                 } catch(e){}
                 try {

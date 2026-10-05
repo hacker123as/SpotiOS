@@ -134,6 +134,8 @@ import compose.icons.tablericons.Check
 import compose.icons.tablericons.ChevronRight
 import compose.icons.tablericons.Click
 import compose.icons.tablericons.CloudOff
+import compose.icons.tablericons.HandFinger
+import compose.icons.tablericons.Photo
 import compose.icons.tablericons.Code
 import compose.icons.tablericons.ColorSwatch
 import compose.icons.tablericons.DeviceMobile
@@ -456,6 +458,62 @@ fun SettingsContent(
                             amoledTheme = enabled
                             onAmoledThemeChange(enabled)
                             prefs.edit().putBoolean("AmoledTheme", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var spoTabBar by remember { mutableStateOf(prefs.getBoolean("SpoTabBar", true)) }
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_spo_tab_bar),
+                        subtitle = stringResource(R.string.settings_spo_tab_bar_subtitle),
+                        icon = TablerIcons.DeviceMobile,
+                        checked = spoTabBar,
+                        onCheckedChange = { enabled ->
+                            spoTabBar = enabled
+                            prefs.edit().putBoolean("SpoTabBar", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var spoArtWall by remember { mutableStateOf(prefs.getBoolean("SpoArtWall", true)) }
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_spo_art_wallpaper),
+                        subtitle = stringResource(R.string.settings_spo_art_wallpaper_subtitle),
+                        icon = TablerIcons.Photo,
+                        checked = spoArtWall,
+                        onCheckedChange = { enabled ->
+                            spoArtWall = enabled
+                            prefs.edit().putBoolean("SpoArtWall", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var spoHaptics by remember { mutableStateOf(prefs.getBoolean("SpoHaptics", true)) }
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_spo_haptics),
+                        subtitle = stringResource(R.string.settings_spo_haptics_subtitle),
+                        icon = TablerIcons.HandFinger,
+                        checked = spoHaptics,
+                        onCheckedChange = { enabled ->
+                            spoHaptics = enabled
+                            prefs.edit().putBoolean("SpoHaptics", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var autoOfflineLibrary by remember { mutableStateOf(prefs.getBoolean("AutoOfflineLibrary", true)) }
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_auto_offline_library),
+                        subtitle = stringResource(R.string.settings_auto_offline_library_subtitle),
+                        icon = TablerIcons.CloudOff,
+                        checked = autoOfflineLibrary,
+                        onCheckedChange = { enabled ->
+                            autoOfflineLibrary = enabled
+                            prefs.edit().putBoolean("AutoOfflineLibrary", enabled).apply()
                         }
                     )
 

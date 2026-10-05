@@ -136,11 +136,11 @@ html:not(:has(#spotilol-amoled-theme)) :is(.encore-dark-theme, .encore-dark-them
    02 · WALLPAPER  —  living aurora behind the glass
    ===================================================================== */
 
-html {
+html:not(.spo) {
   background: var(--lg-wall) !important;
 }
 
-body {
+html:not(.spo) body {
   background: transparent !important;
   color: var(--lg-ink);
   -webkit-tap-highlight-color: transparent;
@@ -149,7 +149,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-body::before {
+html:not(.spo) body::before {
   content: "";
   position: fixed;
   inset: -25vmax;
@@ -166,7 +166,7 @@ body::before {
 }
 
 /* film grain: stops gradient banding on OLED screens */
-body::after {
+html:not(.spo) body::after {
   content: "";
   position: fixed;
   inset: 0;
@@ -259,12 +259,12 @@ html:has(#spl-power-save) body::before {
 }
 
 /* room so the last row never hides under the player */
-#main .Root__main-view main {
+html:not(.spo) #main .Root__main-view main {
   padding-bottom: var(--lg-dock-space) !important;
 }
 
 /* blur that fades in toward the bottom, behind the player */
-#main .Root__main-view::after {
+html:not(.spo) #main .Root__main-view::after {
   content: "";
   position: fixed;
   left: 0;
@@ -567,14 +567,14 @@ html:has(#spl-power-save) body::before {
 
 
 /* =====================================================================
-   13 · SPOTILOL PLAYER  —  floating Liquid Glass player
+   13 · SPOTIOS PLAYER  —  floating Liquid Glass player
    Restyles #spotilolPlayerControls (the default player engine). Only
    paint and press feel change; layout, mini mode and swipe gestures are
    still Spotilol's own. No transform/animation on the container itself,
    because the swipe-to-minimise gesture drives it with inline styles.
    ===================================================================== */
 
-html #spotilolPlayerControls {
+html:not(.spo) #spotilolPlayerControls {
   /* border-box so max-width includes the padding: without it the player
      overflows its side margins and touches both screen edges on phones */
   box-sizing: border-box;
@@ -590,7 +590,7 @@ html #spotilolPlayerControls {
 }
 
 /* light-catching rim, brighter at the top-left like real glass */
-html #spotilolPlayerControls::before {
+html:not(.spo) #spotilolPlayerControls::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -614,7 +614,7 @@ html #spotilolPlayerControls::before {
 
 /* soft top sheen (z-index -1 inside the isolated player = above the
    glass background, below the content) */
-html #spotilolPlayerControls::after {
+html:not(.spo) #spotilolPlayerControls::after {
   content: "";
   position: absolute;
   left: 1px;
@@ -629,7 +629,7 @@ html #spotilolPlayerControls::after {
 }
 
 /* rim turns accent-tinted while music is playing */
-html #spotilolPlayerControls:has(#spl-play svg path[d^="M2.7"])::before {
+html:not(.spo) #spotilolPlayerControls:has(#spl-play svg path[d^="M2.7"])::before {
   background: linear-gradient(
     135deg,
     rgba(255, 255, 255, .55) 0%,
@@ -641,37 +641,37 @@ html #spotilolPlayerControls:has(#spl-play svg path[d^="M2.7"])::before {
 }
 
 /* --- now playing info --- */
-html #spotilolPlayerControls .spl-cover img {
+html:not(.spo) #spotilolPlayerControls .spl-cover img {
   border-radius: var(--lg-r-sm);
   box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
 }
 
-html #spotilolPlayerControls .spl-track {
+html:not(.spo) #spotilolPlayerControls .spl-track {
   font-weight: 700;
   letter-spacing: -.01em;
   color: var(--lg-ink);
 }
 
-html #spotilolPlayerControls .spl-artist {
+html:not(.spo) #spotilolPlayerControls .spl-artist {
   color: var(--lg-ink-2);
 }
 
 /* --- buttons: springy press --- */
-html #spotilolPlayerControls .spl-btn {
+html:not(.spo) #spotilolPlayerControls .spl-btn {
   transition:
     transform var(--lg-med) var(--lg-spring),
     color var(--lg-fast) ease,
     background var(--lg-fast) ease;
 }
 
-html #spotilolPlayerControls .spl-btn:active {
+html:not(.spo) #spotilolPlayerControls .spl-btn:active {
   transform: scale(.84);
   background: var(--lg-glass-press);
   transition-duration: .08s;
 }
 
 /* play / pause: solid white iOS button */
-html #spotilolPlayerControls .spl-play {
+html:not(.spo) #spotilolPlayerControls .spl-play {
   background: #fff !important;
   color: #000 !important;
   box-shadow:
@@ -680,31 +680,31 @@ html #spotilolPlayerControls .spl-play {
     inset 0 -2px 6px rgba(0, 0, 0, .12);
 }
 
-html #spotilolPlayerControls .spl-play:hover {
+html:not(.spo) #spotilolPlayerControls .spl-play:hover {
   background: #fff !important;
 }
 
-html #spotilolPlayerControls .spl-play:active {
+html:not(.spo) #spotilolPlayerControls .spl-play:active {
   transform: scale(.86) !important;
 }
 
 /* --- progress bar: thin, rounded, clean --- */
-html #spotilolPlayerControls .spl-bar {
+html:not(.spo) #spotilolPlayerControls .spl-bar {
   background: rgba(255, 255, 255, .18);
   border-radius: var(--lg-r-pill);
 }
 
-html #spotilolPlayerControls .spl-fill {
+html:not(.spo) #spotilolPlayerControls .spl-fill {
   background: var(--lg-accent);
   border-radius: var(--lg-r-pill);
 }
 
-html #spotilolPlayerControls .spl-time {
+html:not(.spo) #spotilolPlayerControls .spl-time {
   color: var(--lg-ink-3);
 }
 
 /* mini mode: the edge progress line floats inside the glass */
-html #spotilolPlayerControls .spl-edgebar {
+html:not(.spo) #spotilolPlayerControls .spl-edgebar {
   left: 18px;
   right: 18px;
   bottom: 6px;
@@ -714,35 +714,35 @@ html #spotilolPlayerControls .spl-edgebar {
   overflow: hidden;
 }
 
-html #spotilolPlayerControls.spl-mini .spl-cover img {
+html:not(.spo) #spotilolPlayerControls.spl-mini .spl-cover img {
   -webkit-mask-image: none;
   mask-image: none;
 }
 
 /* volume slider follows the glass palette */
-html #spotilolPlayerControls .spl-vol-fill {
+html:not(.spo) #spotilolPlayerControls .spl-vol-fill {
   background: var(--lg-accent);
 }
 
 @media (max-width: 420px) {
-  html #spotilolPlayerControls {
+  html:not(.spo) #spotilolPlayerControls {
     bottom: calc(8px + var(--lg-safe-b));
     max-width: min(560px, calc(100vw - 16px - var(--lg-safe-l) - var(--lg-safe-r)));
     border-radius: 24px;
   }
 
-  html #spotilolPlayerControls::after {
+  html:not(.spo) #spotilolPlayerControls::after {
     border-radius: 23px 23px 50% 50% / 23px 23px 16px 16px;
   }
 }
 
 @media (max-width: 360px) {
-  html #spotilolPlayerControls {
+  html:not(.spo) #spotilolPlayerControls {
     border-radius: 22px;
   }
 
   /* keep the volume slider inside the glass on narrow phones */
-  html #spotilolPlayerControls .spl-vol-bar {
+  html:not(.spo) #spotilolPlayerControls .spl-vol-bar {
     width: 44px;
   }
 }
@@ -1031,5 +1031,5 @@ html:not(:has(#spotilol-lyrics-style)) #main [data-testid="lyrics-container"] {
 }
 
 /* =====================================================================
-   end · LILAMI LIQUID OS 26 · made for Spotilol
+   end · LILAMI LIQUID OS 26 · made for SpotiOS
    ===================================================================== */

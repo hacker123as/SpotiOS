@@ -38,6 +38,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -103,7 +106,6 @@ import androidx.webkit.ProxyController
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import androidx.webkit.WebSettingsCompat
-import com.google.firebase.analytics.FirebaseAnalytics
 import com.project.lol.R
 import com.project.lol.bridge.SpotifyBridge
 import com.project.lol.offline.DownloadManager
@@ -176,6 +178,11 @@ class MainActivity : ComponentActivity() {
     private var sleepTimer: CountDownTimer? = null
     private val sleepTimerRemainingMs = mutableLongStateOf(0L)
     private val sleepTimerActive = mutableStateOf(false)
+    private val sleepEndOfSong = mutableStateOf(false)
+    private val spoTabBarState = mutableStateOf(true)
+    private val spoPrefListener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+        if (key == "SpoTabBar") spoTabBarState.value = p.getBoolean("SpoTabBar", true)
+    }
 
     private val loadingProgress = mutableIntStateOf(100)
     private val blockServiceWorkerState = mutableStateOf(true)
@@ -186,8 +193,6 @@ class MainActivity : ComponentActivity() {
 
     private var changelogOnUpdate = false
 
-    private val analytics: FirebaseAnalytics by lazy { FirebaseAnalytics.getInstance(this) }
-
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -197,11 +202,6 @@ class MainActivity : ComponentActivity() {
         }
         super.onCreate(savedInstanceState)
 
-        // Track screen view
-        analytics.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, Bundle().apply {
-            putString(FirebaseAnalytics.Param.SCREEN_NAME, "MainActivity")
-            putString(FirebaseAnalytics.Param.SCREEN_CLASS, "MainActivity")
-        })
 
         prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
         changelogOnUpdate = ChangelogPrefs.shouldShowOnUpdate(this)
@@ -233,11 +233,13 @@ class MainActivity : ComponentActivity() {
         serviceEnabledState.value = prefs.getBoolean("ServiceOn", true)
         materialYouState.value = prefs.getBoolean("MaterialYou", false)
         amoledState.value = prefs.getBoolean("AmoledTheme", false)
-        hideTopBarState.value = prefs.getBoolean("HideTopBar", false)
+        hideTopBarState.value = prefs.getBoolean("HideTopBar", true)
         landscapeModeState.value = prefs.getBoolean("LandscapeMode", false)
         keepScreenOnState.value = prefs.getBoolean("KeepScreenOn", false)
         paletteSeedState.value = prefs.getString("PaletteSeed", null)
         blockServiceWorkerState.value = prefs.getBoolean("BlockServiceWorker", true)
+        spoTabBarState.value = prefs.getBoolean("SpoTabBar", true)
+        prefs.registerOnSharedPreferenceChangeListener(spoPrefListener)
         applyOrientation()
         applyKeepScreenOn()
 
@@ -281,11 +283,18 @@ class MainActivity : ComponentActivity() {
                 AccentTheme.resolveColor(this@MainActivity)
             }
 
-            BackHandler(enabled = settingsDialogOpen || webView?.canGoBack() == true) {
-                if (settingsDialogOpen) {
-                    settingsDialogOpen = false
-                } else {
-                    webView?.goBack()
+            BackHandler(enabled = true) {
+                val wv = webView
+                when {
+                    settingsDialogOpen -> settingsDialogOpen = false
+                    wv == null -> moveTaskToBack(true)
+                    else -> wv.evaluateJavascript(
+                        "(function(){try{return !!(window.spoBack&&window.spoBack());}catch(e){return false;}})()"
+                    ) { handled ->
+                        if (handled != "true") {
+                            if (wv.canGoBack()) wv.goBack() else moveTaskToBack(true)
+                        }
+                    }
                 }
             }
 
@@ -376,9 +385,6 @@ class MainActivity : ComponentActivity() {
                                 },
                                 navigationIcon = {
                                     IconButton(onClick = {
-                                        analytics.logEvent("open_settings", Bundle().apply {
-                                            putString(FirebaseAnalytics.Param.SCREEN_NAME, "SettingsDialog")
-                                        })
                                         settingsDialogOpen = true
                                     }) {
                                         Icon(
@@ -426,6 +432,14 @@ class MainActivity : ComponentActivity() {
                                 if (!timerActive) {
                                     sleepTimerInputText.value = ""
                                 }
+                            }
+
+                            bridge.onOpenSettingsRequest = {
+                                settingsDialogOpen = true
+                            }
+
+                            bridge.onSleepTimerFinished = {
+                                cancelSleepTimer()
                             }
 
                             bridge.onEnterPipRequest = {
@@ -604,6 +618,7 @@ class MainActivity : ComponentActivity() {
                                     timerRemainingMs = sleepTimerRemainingMs.longValue,
                                     inputText = sleepTimerInputText.value,
                                     onInputChange = { sleepTimerInputText.value = it },
+                                    endOfSong = sleepEndOfSong.value,
                                     onSetTimer = { minutes ->
                                         showSleepTimerDialog.value = false
                                         if (minutes > 0) {
@@ -611,6 +626,10 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             cancelSleepTimer()
                                         }
+                                    },
+                                    onEndOfSong = {
+                                        showSleepTimerDialog.value = false
+                                        startEndOfSongTimer()
                                     },
                                     onCancelTimer = {
                                         showSleepTimerDialog.value = false
@@ -638,7 +657,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        if (hideTopBar) {
+                        if (hideTopBar && !(spoTabBarState.value && serviceEnabled)) {
                             QuickAccessOverlay(
                                 showMenu = showMiniMenu,
                                 onToggleMenu = { showMiniMenu = !showMiniMenu },
@@ -671,16 +690,10 @@ class MainActivity : ComponentActivity() {
         serviceEnabledState.value = newValue
         prefs.edit().putBoolean("ServiceOn", newValue).apply()
         if (!newValue) {
-            analytics.logEvent("service_toggle", Bundle().apply {
-                putString("enabled", "off")
-            })
             stopService(Intent(this, MediaNotificationService::class.java))
             serviceStarted = false
             destroyWebView()
         } else {
-            analytics.logEvent("service_toggle", Bundle().apply {
-                putString("enabled", "on")
-            })
         }
     }
 
@@ -769,9 +782,6 @@ class MainActivity : ComponentActivity() {
         sleepTimerActive.value = true
         sleepTimerRemainingMs.longValue = totalMs
 
-        analytics.logEvent("sleep_timer_start", Bundle().apply {
-            putString("minutes", minutes.toString())
-        })
 
         webView?.evaluateJavascript("""
             if(window.timerBtn) timerBtn.style.color='var(--spl-accent,#2d6)';
@@ -798,13 +808,27 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
 
+    private fun startEndOfSongTimer() {
+        cancelSleepTimer()
+        Logger.i(TAG, "sleep timer: end of song")
+        sleepTimerActive.value = true
+        sleepEndOfSong.value = true
+        webView?.evaluateJavascript("""
+            if(window.spoSleepEndOfSong) spoSleepEndOfSong(true);
+            var t=document.getElementById('spl-timer');
+            if(t) t.classList.add('spl-active');
+        """.trimIndent(), null)
+    }
+
     private fun cancelSleepTimer() {
         if (sleepTimer != null) Logger.i(TAG, "sleep timer cancelled")
         sleepTimer?.cancel()
         sleepTimer = null
         sleepTimerActive.value = false
+        sleepEndOfSong.value = false
         sleepTimerRemainingMs.longValue = 0L
         webView?.evaluateJavascript("""
+            if(window.spoSleepEndOfSong) spoSleepEndOfSong(false);
             if(window.timerBtn) timerBtn.style.color='';
             var t=document.getElementById('spl-timer');
             if(t) t.classList.remove('spl-active');
@@ -816,134 +840,136 @@ class MainActivity : ComponentActivity() {
         timerActive: Boolean,
         timerRemainingMs: Long,
         inputText: String,
+        endOfSong: Boolean,
         onInputChange: (String) -> Unit,
         onSetTimer: (Int) -> Unit,
+        onEndOfSong: () -> Unit,
         onCancelTimer: () -> Unit,
         onDismiss: () -> Unit
     ) {
         val minutes = inputText.toIntOrNull() ?: 0
-        if (timerActive) {
-            val remainingSecs = timerRemainingMs / 1000
-            val mins = remainingSecs / 60
-            val secs = remainingSecs % 60
-            val timeStr = stringResource(R.string.main_timer_remaining, mins, secs)
-
-            AlertDialog(
-                onDismissRequest = onDismiss,
-                shape = RoundedCornerShape(16.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                titleContentColor = MaterialTheme.colorScheme.onSurface,
-                textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                title = {
-                    Text(
-                        stringResource(R.string.main_sleep_timer_title),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                },
-                text = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+        val presets = listOf(5, 15, 30, 45, 60)
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            title = {
+                Text(
+                    stringResource(R.string.main_sleep_timer_title),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (timerActive) {
                         Text(
                             text = stringResource(R.string.main_sleep_timer_emoji),
                             style = MaterialTheme.typography.displaySmall
                         )
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.main_timer_active),
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = timeStr,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                confirmButton = {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Button(onClick = onDismiss) {
-                            Text(stringResource(R.string.main_close))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Button(
-                            onClick = onCancelTimer,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
+                        if (endOfSong) {
+                            Text(
+                                text = stringResource(R.string.main_timer_end_of_song_active),
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
                             )
-                        ) {
-                            Text(stringResource(R.string.main_cancel_timer))
+                        } else {
+                            val remainingSecs = timerRemainingMs / 1000
+                            Text(
+                                text = stringResource(R.string.main_timer_active),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.main_timer_remaining, remainingSecs / 60, remainingSecs % 60),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
-                    }
-                },
-                dismissButton = {}
-            )
-        } else {
-            AlertDialog(
-                onDismissRequest = onDismiss,
-                shape = RoundedCornerShape(16.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                titleContentColor = MaterialTheme.colorScheme.onSurface,
-                textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                title = {
-                    Text(
-                        stringResource(R.string.main_sleep_timer_title),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                },
-                text = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    } else {
                         Text(
-                            text = stringResource(R.string.main_set_minutes),
+                            text = stringResource(R.string.main_timer_presets_hint),
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(14.dp))
+                        val rows = (presets.map { it.toString() } + "eos").chunked(3)
+                        rows.forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                row.forEach { item ->
+                                    FilledTonalButton(
+                                        onClick = {
+                                            if (item == "eos") onEndOfSong() else onSetTimer(item.toInt())
+                                        },
+                                        shape = RoundedCornerShape(16.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = when (item) {
+                                                "eos" -> stringResource(R.string.main_timer_end_of_song)
+                                                "60" -> "1 h"
+                                                else -> "$item min"
+                                            },
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 2,
+                                            style = MaterialTheme.typography.labelLarge
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        Spacer(Modifier.height(6.dp))
                         OutlinedTextField(
                             value = inputText,
                             onValueChange = { new ->
-                                if (new.length <= 5 && new.all { it.isDigit() }) {
-                                    onInputChange(new)
-                                }
+                                if (new.length <= 4 && new.all { it.isDigit() }) onInputChange(new)
                             },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            label = { Text(stringResource(R.string.main_timer_custom)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            placeholder = { Text(stringResource(R.string.main_timer_minutes_hint)) },
                             trailingIcon = { Text(stringResource(R.string.main_minutes_suffix), style = MaterialTheme.typography.bodyMedium) }
                         )
                     }
-                },
-                confirmButton = {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Button(onClick = onDismiss) {
-                            Text(stringResource(R.string.main_cancel))
-                        }
+                }
+            },
+            confirmButton = {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (timerActive) {
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.main_close)) }
+                        Spacer(Modifier.width(12.dp))
+                        Button(
+                            onClick = onCancelTimer,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) { Text(stringResource(R.string.main_cancel_timer)) }
+                    } else {
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.main_cancel)) }
                         Spacer(Modifier.width(12.dp))
                         Button(
                             onClick = { onSetTimer(minutes) },
-                            enabled = minutes > 0
-                        ) {
-                            Text(stringResource(R.string.main_set_timer))
-                        }
+                            enabled = minutes > 0,
+                            shape = RoundedCornerShape(16.dp)
+                        ) { Text(stringResource(R.string.main_set_timer)) }
                     }
-                },
-                dismissButton = {}
-            )
-        }
+                }
+            },
+            dismissButton = {}
+        )
     }
 
     @Composable
@@ -966,7 +992,7 @@ class MainActivity : ComponentActivity() {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_launcher_playstore),
+                    painter = painterResource(R.drawable.ic_spotios_logo),
                     contentDescription = stringResource(R.string.main_quick_settings),
                     tint = Color.Unspecified,
                     modifier = Modifier.fillMaxSize()
@@ -1407,16 +1433,12 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Logger.i(TAG, "activity resumed: restoring webview loops")
 
-        analytics.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, Bundle().apply {
-            putString(FirebaseAnalytics.Param.SCREEN_NAME, "MainActivity")
-            putString(FirebaseAnalytics.Param.SCREEN_CLASS, "MainActivity")
-        })
 
         prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
         serviceEnabledState.value = prefs.getBoolean("ServiceOn", true)
         materialYouState.value = prefs.getBoolean("MaterialYou", false)
         amoledState.value = prefs.getBoolean("AmoledTheme", false)
-        hideTopBarState.value = prefs.getBoolean("HideTopBar", false)
+        hideTopBarState.value = prefs.getBoolean("HideTopBar", true)
         landscapeModeState.value = prefs.getBoolean("LandscapeMode", false)
         keepScreenOnState.value = prefs.getBoolean("KeepScreenOn", false)
         paletteSeedState.value = prefs.getString("PaletteSeed", null)
@@ -1532,6 +1554,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        prefs.unregisterOnSharedPreferenceChangeListener(spoPrefListener)
         Logger.i(TAG, "activity destroyed, tearing down webview")
         cancelSleepTimer()
         pipVideoView = null

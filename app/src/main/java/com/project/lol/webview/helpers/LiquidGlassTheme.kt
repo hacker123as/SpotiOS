@@ -5,9 +5,10 @@ import com.project.lol.util.Logger
 import org.json.JSONObject
 
 /**
- * Spotilol - Liquid Glass theme (LilAmi Liquid OS 26).
+ * SpotiOS - LilAmi Liquid OS 26 extra glass layer.
  *
- * Bundled iOS 26 style glass theme, on by default. The stylesheet lives in
+ * Optional extra glass on top of the SpotiOS shell (SpotiOSUi), off by
+ * default. Its wallpaper and player sections only apply without the shell. The stylesheet lives in
  * assets/themes/liquid_glass.css and is injected as
  * <style id="spotilol-liquid-glass">, placed before 'spotilol-custom-css'
  * so the user's Custom CSS can still override any of its tokens.
@@ -15,7 +16,7 @@ import org.json.JSONObject
 object LiquidGlassTheme {
 
     const val PREF_KEY = "LiquidGlassTheme"
-    const val DEFAULT_ENABLED = true
+    const val DEFAULT_ENABLED = false
 
     private const val TAG = "LiquidGlassTheme"
     private const val ASSET_PATH = "themes/liquid_glass.css"

@@ -54,7 +54,7 @@ object DownloadFolder {
         return if (relative.isBlank()) root else "$root/$relative"
     }
 
-    /** Short label for status messages, e.g. Music/Spotilol. */
+    /** Short label for status messages, e.g. Music/SpotiOS. */
     fun label(treeUri: Uri): String {
         val id = treeDocumentId(treeUri)
         val relative = id.substringAfter(':', "")
