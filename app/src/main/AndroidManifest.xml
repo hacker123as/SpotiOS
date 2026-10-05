@@ -14,6 +14,11 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <!-- In-app updates: install the new APK over SpotiOS, without a prompt where Android allows it,
+         and the Uninstall button for a one-time reinstall. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <application
         android:name=".SpotilolApp"
@@ -166,6 +171,19 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
             tools:targetApi="34" />
+
+        <receiver
+            android:name=".update.InstallResultReceiver"
+            android:exported="false" />
+
+        <!-- Brings Server Mode back after an update. -->
+        <receiver
+            android:name=".update.PackageReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name="androidx.media.session.MediaButtonReceiver"

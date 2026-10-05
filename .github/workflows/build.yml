@@ -58,6 +58,7 @@ jobs:
             echo "$KEY_ALIAS" > ~/spotios-signing/alias
             echo "$KEY_PASSWORD" > ~/spotios-signing/key.pass
           elif [ ! -f ~/spotios-signing/release.jks ]; then
+            echo "::warning title=NEW signing key generated::The cached signing key (Actions cache spotios-signing-v1) was not found, so this build is signed with a brand-new key. It will NOT install over earlier SpotiOS builds: everyone has to uninstall first. Restore the old key or add the SPOTIOS_KEYSTORE_B64 secrets if you can."
             PASS=$(openssl rand -hex 16)
             keytool -genkeypair -v -keystore ~/spotios-signing/release.jks \
               -alias spotios -keyalg RSA -keysize 4096 -validity 36500 \
@@ -72,8 +73,11 @@ jobs:
           echo "SPOTIOS_KEY_ALIAS=$(cat ~/spotios-signing/alias)" >> "$GITHUB_ENV"
           echo "SPOTIOS_KEY_PASSWORD=$(cat ~/spotios-signing/key.pass)" >> "$GITHUB_ENV"
 
+      # GITHUB_RUN_NUMBER (set by Actions) becomes BuildConfig.CI_BUILD, the "buildN" of the
+      # release tag, so the app can tell builds of the same version apart when it checks for updates.
       - name: Build release APK
         run: |
+          echo "CI build number: $GITHUB_RUN_NUMBER"
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:assembleRelease
 
@@ -86,6 +90,40 @@ jobs:
           cp "$SRC" "$OUT"
           echo "file=$OUT" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          CONFIG=app/build/generated/source/buildConfig/release/com/project/lol/BuildConfig.java
+          if ! grep -q "CI_BUILD = ${GITHUB_RUN_NUMBER};" "$CONFIG" 2>/dev/null; then
+            echo "::warning title=CI_BUILD mismatch::BuildConfig.CI_BUILD is not ${GITHUB_RUN_NUMBER}, so the in-app update check may miss builds of the same version."
+          fi
+
+      # The certificate fingerprint (public, not the key) goes in the release notes so a key change shows.
+      - name: Signing certificate
+        id: cert
+        run: |
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          SHA=$("${BUILD_TOOLS}apksigner" verify --print-certs "${{ steps.apk.outputs.file }}" \
+            | grep -m1 'certificate SHA-256 digest:' | awk '{print $NF}')
+          if [ -z "$SHA" ]; then
+            echo "::error::Could not read the APK's signing certificate"
+            exit 1
+          fi
+          echo "Signing certificate SHA-256: $SHA"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      # What's new is the pushed commit's message without trailer lines (Signed-off-by: and the like);
+      # the app shows the part above "---".
+      - name: Release notes
+        run: |
+          {
+            git log -1 --format=%B | grep -vE '^[A-Za-z]+(-[A-Za-z]+)+: ' || true
+            echo
+            echo "---"
+            echo
+            echo "SpotiOS ${{ steps.apk.outputs.version }}, built from \`${{ github.sha }}\`."
+            echo "Download the \`.apk\` below and install it (allow \"Install unknown apps\" if Android asks)."
+            echo
+            echo "Signing certificate SHA-256: \`${{ steps.cert.outputs.sha256 }}\`"
+          } > release-notes.md
+          cat release-notes.md
 
       - uses: actions/upload-artifact@v4
         with:
@@ -99,6 +137,4 @@ jobs:
           name: SpotiOS ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})
           prerelease: ${{ github.ref != 'refs/heads/main' }}
           files: ${{ steps.apk.outputs.file }}
-          body: |
-            SpotiOS ${{ steps.apk.outputs.version }}, built from `${{ github.sha }}`.
-            Download the `.apk` below and install it (allow "Install unknown apps" if Android asks).
+          body_path: release-notes.md

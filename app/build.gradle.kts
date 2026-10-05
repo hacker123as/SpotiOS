@@ -13,6 +13,9 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// The GitHub Actions run number, the "buildN" in release tags. 0 for local builds.
+val ciBuild = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 0
+
 
 android {
     namespace = "com.project.lol"
@@ -24,6 +27,7 @@ android {
         targetSdk = 36
         versionCode = 2101
         versionName = "2.10.1"
+        buildConfigField("int", "CI_BUILD", ciBuild.toString())
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }

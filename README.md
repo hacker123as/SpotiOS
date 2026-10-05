@@ -20,6 +20,7 @@
 ## Contents
 
 - [Install](#install)
+- [Updates](#updates)
 - [First launch](#first-launch)
 - [Features](#features)
 - [Downloads and offline listening](#downloads-and-offline-listening)
@@ -40,6 +41,21 @@
 
 SpotiOS uses its own app id (`com.spotios.app`), so it installs next to Spotilol instead of replacing it.
 It needs Android 9 or newer.
+
+## Updates
+
+SpotiOS checks [GitHub Releases](https://github.com/hacker123as/SpotiOS/releases) for a new version when it opens
+(at most every 6 hours). You can also check any time in **Settings → About → Check for updates**.
+
+- When there's an update, a card shows what's new with **Update** and **Later**. Later hides that version for a day.
+- **Update** downloads the new version and installs it over the one you have, so your login, settings and downloads
+  stay. The first time, Android asks you to allow SpotiOS to install apps: tap **Allow**, turn it on and come back.
+- SpotiOS closes for a moment while Android updates it. With Server mode on, the server starts again by itself.
+
+Android only installs an update over the app when both are signed with the same key. If your SpotiOS was signed with
+another key (an APK someone built and sent you, or an older build), SpotiOS saves the new version to **Downloads** and
+asks for a one-time reinstall: tap **Uninstall**, then open the saved file. You'll need to sign in to Spotify again.
+After that, updates install with one tap. Get SpotiOS from Releases so updates keep installing in place.
 
 ## First launch
 
@@ -232,6 +248,8 @@ The APK lands in `app/build/outputs/apk/debug/`. GitHub Actions also builds ever
 To sign releases with your own permanent key, add these repository secrets:
 `SPOTIOS_KEYSTORE_B64` (base64 of the `.jks`), `SPOTIOS_STORE_PASSWORD`, `SPOTIOS_KEY_ALIAS` and
 `SPOTIOS_KEY_PASSWORD`. Without them, CI generates a key once and reuses it from the Actions cache.
+`.github/workflows/keep-signing-key.yml` restores that cache twice a week so GitHub never evicts it, and fails loudly
+if it's gone. Each release lists its signing certificate's SHA-256, so a key change is easy to spot.
 
 ### How it works
 
@@ -244,6 +262,7 @@ SpotiOS loads `open.spotify.com` in a WebView and adds its own CSS and JavaScrip
 - `webview/helpers/UserScripts.kt`: the Dev menu's user scripts.
 - `lyrics/LrcLib.kt`: lyrics lookup.
 - `offline/`: downloads and the offline library.
+- `update/` and `util/UpdateChecker.kt`: update checks against GitHub Releases and installing updates in place.
 - `ui/onboarding/OnboardingFlow.kt`: the first-launch screens.
 
 ---

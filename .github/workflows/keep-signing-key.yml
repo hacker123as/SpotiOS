@@ -1,0 +1,40 @@
+name: Keep signing key
+
+# GitHub evicts Actions caches that go unused for 7 days. Without secrets, the release signing key
+# lives only in the spotios-signing-v1 cache, and a new key would stop every update from installing
+# over the old app. Restoring it counts as a use and keeps it. It runs twice a week because
+# scheduled runs can start hours late. Scheduled runs see main's caches.
+
+on:
+  schedule:
+    - cron: "17 4 * * 1,4"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  touch-key:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Restore cached signing key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/spotios-signing
+          key: spotios-signing-v1
+          fail-on-cache-miss: true
+
+      - name: Check the key is there
+        run: |
+          if [ ! -s ~/spotios-signing/release.jks ]; then
+            echo "::error::The spotios-signing-v1 cache has no release.jks"
+            exit 1
+          fi
+          echo "Signing key cache spotios-signing-v1 is present and was used."
+
+      - name: Key missing
+        if: failure()
+        run: |
+          echo "::error title=Signing key cache missing::The cached release signing key (spotios-signing-v1) is gone. The next build will make a new key and its APK won't install over existing SpotiOS installs. Restore the key from a backup, or add the SPOTIOS_KEYSTORE_B64, SPOTIOS_STORE_PASSWORD, SPOTIOS_KEY_ALIAS and SPOTIOS_KEY_PASSWORD secrets, before the next push to main."
+          exit 1

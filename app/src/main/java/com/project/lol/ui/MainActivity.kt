@@ -16,8 +16,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
-import android.os.Handler
-import android.os.Looper
 import android.util.Rational
 import android.widget.Toast
 import android.view.LayoutInflater
@@ -114,7 +112,9 @@ import com.project.lol.service.ServerMode
 import com.project.lol.webview.PlayerHost
 import com.project.lol.ui.components.ChangelogDialog
 import com.project.lol.ui.components.SettingsDialog
+import com.project.lol.ui.components.UpdatePrompt
 import com.project.lol.ui.theme.SpotifyTheme
+import com.project.lol.update.UpdateManager
 import com.project.lol.util.BuildInfo
 import com.project.lol.util.ChangelogPrefs
 import com.project.lol.util.Logger
@@ -224,15 +224,7 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
             WebView.setWebContentsDebuggingEnabled(true)
         }
 
-        val uc = UpdateChecker(this)
-        uc.autoCheck { url ->
-            Toast.makeText(this, getString(R.string.main_update_available), Toast.LENGTH_SHORT).show()
-            Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                } catch (_: Exception) {}
-            }, 2000)
-        }
+        UpdateChecker(this).autoCheck { update -> UpdateManager.offer(update) }
 
         val loggedIn = prefs.getBoolean("LoggedIn", false)
 
@@ -318,6 +310,7 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
                         ChangelogPrefs.markShown(this@MainActivity)
                     })
                 }
+                UpdatePrompt()
                 SettingsDialog(
                     visible = settingsDialogOpen,
                     onClose = { settingsDialogOpen = false },

@@ -109,6 +109,7 @@ import com.project.lol.profile.ProfileManager
 import com.project.lol.proxy.LocalProxyManager
 import com.project.lol.service.MediaNotificationService
 import com.project.lol.ui.components.ChangelogDialog
+import com.project.lol.ui.components.CheckForUpdatesTile
 import com.project.lol.ui.theme.SpotifyTheme
 import com.project.lol.util.BuildInfo
 import com.project.lol.util.GitHubApi
@@ -1194,6 +1195,10 @@ fun SettingsContent(
                         icon = TablerIcons.DeviceMobile,
                         onClick = { showChangelogDialog = true }
                     )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    CheckForUpdatesTile()
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
 

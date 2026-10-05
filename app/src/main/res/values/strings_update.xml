@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Update card -->
+    <string name="update_available_title">SpotiOS %1$s is available</string>
+    <string name="update_version_with_build">%1$s build %2$d</string>
+    <string name="update_build">Build %1$d</string>
+    <string name="update_update">Update</string>
+    <string name="update_later">Later</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="update_close">Close</string>
+    <string name="update_retry">Retry</string>
+    <string name="update_in_browser">Download in browser</string>
+    <string name="update_downloading">Downloading… %1$s of %2$s</string>
+    <string name="update_downloading_no_size">Downloading… %1$s</string>
+    <string name="update_permission">Android needs your OK once before SpotiOS can install its own updates. Tap Allow, turn on “Allow from this source”, then come back.</string>
+    <string name="update_allow">Allow</string>
+    <string name="update_installing">Installing… SpotiOS closes for a moment while Android updates it.</string>
+    <string name="update_failed_download">The download didn’t finish. Check your connection and try again.</string>
+    <string name="update_failed_damaged">The download was incomplete. Try again.</string>
+    <string name="update_failed_not_spotios">The file on GitHub isn’t a SpotiOS app. Get the update in your browser instead.</string>
+    <string name="update_failed_install">Android couldn’t install the update.</string>
+    <string name="update_reinstall_title">One-time reinstall</string>
+    <string name="update_reinstall_text">This update is signed differently from the version you have, so Android needs a one-time reinstall. Tap Uninstall, then open %1$s from Downloads. You’ll need to sign in to Spotify again. Future updates install with one tap.</string>
+    <string name="update_reinstall_text_not_saved">This update is signed differently from the version you have, so Android needs a one-time reinstall. Tap Download in browser first, then tap Uninstall and open the downloaded SpotiOS file. You’ll need to sign in to Spotify again. Future updates install with one tap.</string>
+    <string name="update_uninstall">Uninstall</string>
+
+    <!-- Settings > About -->
+    <string name="update_check">Check for updates</string>
+    <string name="update_current_build">v%1$s · build %2$d</string>
+    <string name="update_current_local">v%1$s · local build</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_up_to_date">You’re up to date</string>
+    <string name="update_rate_limited">GitHub is busy. Try again in a few minutes</string>
+    <string name="update_check_failed">Couldn’t reach GitHub. Check your connection</string>
+
+    <!-- After an update -->
+    <string name="update_channel">App updates</string>
+    <string name="update_done_title">SpotiOS %1$s is installed</string>
+    <string name="update_done_text">Tap to open SpotiOS</string>
+</resources>

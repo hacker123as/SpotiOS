@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.view.WindowCompat
 import com.project.lol.R
 import com.project.lol.profile.ProfileManager
+import com.project.lol.ui.components.UpdatePrompt
 import com.project.lol.ui.screens.OfflineScreen
 import com.project.lol.ui.theme.SpotifyTheme
 
@@ -124,6 +125,8 @@ class OfflineActivity : ComponentActivity() {
                     onClearData = { clearAllData() },
                     onExit = { exitOfflineMode() }
                 )
+                // Settings > Check for updates opens it here too.
+                UpdatePrompt()
             }
         }
     }
