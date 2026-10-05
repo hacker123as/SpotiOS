@@ -403,6 +403,12 @@ class SpotifyWebViewClient(
             view.evaluateJavascript(cleanJs, null)
         }
         Logger.d(TAG, "injected ${cleanJs.length} bytes (engine=$playerMode)")
+        // Dev > user scripts run last, unstripped, so they see SpotiOS's globals.
+        val userJs = UserScripts.buildJs(view.context, view.url ?: WEB_PLAYER_ORIGIN)
+        if (userJs.isNotEmpty()) {
+            view.evaluateJavascript(userJs, null)
+            Logger.d(TAG, "user scripts injected (${userJs.length} bytes)")
+        }
     }
 
     private fun registerPrefsListener(view: WebView) {

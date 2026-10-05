@@ -50,6 +50,7 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     var onDownloadTrack: ((String) -> Unit)? = null
     var onDownloadCollection: ((String) -> Unit)? = null
     var onOpenSettingsRequest: (() -> Unit)? = null
+    var onOpenDevScripts: (() -> Unit)? = null
     var onSleepTimerFinished: (() -> Unit)? = null
 
     @JavascriptInterface
@@ -223,6 +224,12 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     fun openSettings() {
         val activity = activityRef.get() ?: return
         activity.runOnUiThread { onOpenSettingsRequest?.invoke() }
+    }
+
+    @JavascriptInterface
+    fun openDevScripts() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread { onOpenDevScripts?.invoke() }
     }
 
     @JavascriptInterface

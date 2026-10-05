@@ -174,6 +174,7 @@ class MainActivity : ComponentActivity() {
     private val paletteSeedState = mutableStateOf<String?>(null)
 
     private val showSleepTimerDialog = mutableStateOf(false)
+    private val showDevScripts = mutableStateOf(false)
     private val sleepTimerInputText = mutableStateOf("")
     private var sleepTimer: CountDownTimer? = null
     private val sleepTimerRemainingMs = mutableLongStateOf(0L)
@@ -439,6 +440,8 @@ class MainActivity : ComponentActivity() {
                                 settingsDialogOpen = true
                             }
 
+                            bridge.onOpenDevScripts = { showDevScripts.value = true }
+
                             bridge.onSleepTimerFinished = {
                                 cancelSleepTimer()
                             }
@@ -611,6 +614,13 @@ class MainActivity : ComponentActivity() {
                                         webView?.reload()
                                     }
                                 )
+                            }
+
+                            if (showDevScripts.value) {
+                                com.project.lol.ui.components.DevScriptsDialog(onClose = { changed ->
+                                    showDevScripts.value = false
+                                    if (changed) webView?.reload()
+                                })
                             }
 
                             if (showDialog) {

@@ -256,6 +256,7 @@ fun SettingsContent(
 
     var showConnectionModeDialog by remember { mutableStateOf(false) }
     var showDownloadsManager by remember { mutableStateOf(false) }
+    var showDevScriptsSettings by remember { mutableStateOf(false) }
     var showSaveAccountDialog by remember { mutableStateOf(false) }
     var pendingCookies by remember { mutableStateOf<String?>(null) }
     var accountNameInput by remember { mutableStateOf("") }
@@ -878,6 +879,15 @@ fun SettingsContent(
             }
 
             if (settingsTab == SettingsTab.Advanced) {
+                SettingSectionCard(title = "DEV", icon = TablerIcons.Code) {
+                    SettingTile(
+                        title = "User scripts",
+                        subtitle = "Run your own Tampermonkey-style scripts on Spotify. Also in the account menu as Dev",
+                        icon = TablerIcons.Code,
+                        onClick = { showDevScriptsSettings = true }
+                    )
+                }
+
                 SettingSectionCard(
                     title = stringResource(R.string.settings_section_system),
                     icon = TablerIcons.Power
@@ -1106,6 +1116,10 @@ fun SettingsContent(
                 }
             }
         )
+    }
+
+    if (showDevScriptsSettings) {
+        com.project.lol.ui.components.DevScriptsDialog(onClose = { showDevScriptsSettings = false })
     }
 
     if (showDownloadsManager) {

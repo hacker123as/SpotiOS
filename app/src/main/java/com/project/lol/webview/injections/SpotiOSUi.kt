@@ -74,6 +74,8 @@ html.spo-artwall body::after{
 }
 html.spo-lite.spo-artwall body::after,html.spo-artwall:has(#spotilol-amoled-theme) body::after{display:none!important}
 html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transparent!important}
+/* the grey bar along the bottom was the list's horizontal scrollbar; lists never scroll sideways */
+html.spo .os-scrollbar-horizontal{display:none!important}
 /* no 300ms double-tap-zoom wait: taps on songs and buttons fire right away */
 html.spo,html.spo body,html.spo #main,html.spo [data-testid=tracklist-row],html.spo button,html.spo a,html.spo [role=button]{touch-action:manipulation}
 /* download progress: a glass pill that sits above the mini player, not on it */
@@ -872,6 +874,39 @@ function recoverCrash(){
   if(back!=='/'&&back!=='/search')setTimeout(function(){try{history.pushState({},'',back);dispatchEvent(new PopStateEvent('popstate',{state:{}}));}catch(e){}},900);
 }
 
+/* ---------- "Dev" in the account menu (user scripts) ----------
+   The item is our own node appended at the end of the menu; Spotify's own
+   items are never edited, so React's view of the menu stays intact. */
+function accountMenu(){
+  var ms=document.querySelectorAll('[data-tippy-root] [role=menu],#context-menu [role=menu]');
+  for(var i=0;i<ms.length;i++){
+    var m=ms[i];
+    if(m.querySelector('[data-testid=user-widget-dropdown-logout],a[href*="/account"],a[href*="account/overview"]'))return m;
+  }
+  return null;
+}
+function addDevItem(){
+  var m=accountMenu();if(!m||m.querySelector('#spo-dev-item'))return;
+  var last=m.lastElementChild;if(!last)return;
+  var li=last.cloneNode(true);li.id='spo-dev-item';
+  var target=li.querySelector('a,button,[role=menuitem]')||li;
+  if(target.tagName==='A'){target.removeAttribute('href');target.removeAttribute('target');}
+  target.removeAttribute('data-testid');
+  var label=null,walk=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);
+  while(walk.nextNode()){if(walk.currentNode.nodeValue.trim()){label=walk.currentNode;break;}}
+  if(label)label.nodeValue='Dev';else target.textContent='Dev';
+  var svgs=li.querySelectorAll('svg');for(var k=0;k<svgs.length;k++)svgs[k].style.display='none';
+  li.addEventListener('click',function(e){
+    e.preventDefault();e.stopPropagation();haptic();
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,bubbles:true}));
+    try{AndBridge.openDevScripts();}catch(err){}
+  },true);
+  m.appendChild(li);
+}
+document.addEventListener('click',function(e){
+  if(e.target.closest&&e.target.closest('[data-testid=user-widget-link]')){setTimeout(addDevItem,80);setTimeout(addDevItem,300);}
+},true);
+
 /* ---------- back button ---------- */
 window.spoBack=function(){
   if(sheetOpen){closeSheet();return true;}
@@ -933,6 +968,7 @@ setInterval(function(){
   if(window.__splBg)return;
   var mo=!!qs('[data-tippy-root] [role=menu]');
   if(root().classList.contains('spo-menu')!==mo)root().classList.toggle('spo-menu',mo);
+  if(mo)addDevItem();
   recoverCrash();
   artWall();
   hookPlayer();
