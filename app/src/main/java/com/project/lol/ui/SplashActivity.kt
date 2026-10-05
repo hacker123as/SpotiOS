@@ -77,6 +77,9 @@ import com.project.lol.offline.OfflineStore
 import com.project.lol.proxy.LocalProxyManager
 import com.project.lol.ui.onboarding.OnboardingFlow
 import com.project.lol.ui.onboarding.STEP_BATTERY
+import com.project.lol.ui.onboarding.STEP_MODE
+import com.project.lol.ui.onboarding.STEP_PERMISSIONS
+import com.project.lol.service.ServerMode
 import com.project.lol.ui.onboarding.isIgnoringBatteryOptimizations
 import com.project.lol.ui.theme.SpotifyTheme
 import com.project.lol.util.BuildInfo
@@ -119,6 +122,8 @@ class SplashActivity : ComponentActivity() {
             var onboarding by remember { mutableStateOf(false) }
             var onboardingStep by remember { mutableIntStateOf(0) }
             var onlyBattery by remember { mutableStateOf(false) }
+            // People who set up an older version pick Normal or Server mode once after updating.
+            var onlyMode by remember { mutableStateOf(false) }
             var selectedMode by remember { mutableStateOf("normal") }
             var certInstalled by remember { mutableStateOf(false) }
             var checkDone by remember { mutableStateOf(false) }
@@ -165,8 +170,12 @@ class SplashActivity : ComponentActivity() {
                 }
                 intro = false
                 if (prefs.getBoolean("OnboardingDone", false)) {
+                    if (!prefs.getBoolean(ServerMode.KEY_MODE_ASKED, false)) {
+                        onlyMode = true
+                        onboardingStep = STEP_MODE
+                        onboarding = true
                     // People who set up an older version get asked about battery once.
-                    if (!prefs.getBoolean("BatteryAsked", false) &&
+                    } else if (!prefs.getBoolean("BatteryAsked", false) &&
                         !isIgnoringBatteryOptimizations(this@SplashActivity)
                     ) {
                         onlyBattery = true
@@ -234,7 +243,25 @@ class SplashActivity : ComponentActivity() {
                             },
                             step = onboardingStep,
                             onlyBattery = onlyBattery,
+                            single = onlyMode,
                             onNext = { onboardingStep = (onboardingStep + 1).coerceAtMost(STEP_BATTERY) },
+                            onPickMode = { server ->
+                                ServerMode.setOn(this@SplashActivity, server)
+                                when {
+                                    !onlyMode -> onboardingStep = STEP_PERMISSIONS
+                                    // Server Mode needs to run in the background: ask about battery once.
+                                    server && !isIgnoringBatteryOptimizations(this@SplashActivity) -> {
+                                        onlyMode = false
+                                        onlyBattery = true
+                                        onboardingStep = STEP_BATTERY
+                                    }
+                                    else -> {
+                                        onboarding = false
+                                        checking = true
+                                        checkTrigger++
+                                    }
+                                }
+                            },
                             onRequestPermissions = {
                                 val required = requiredPermissions()
                                 if (required.isEmpty()) {

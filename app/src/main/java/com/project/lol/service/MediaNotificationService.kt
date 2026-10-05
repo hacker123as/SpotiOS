@@ -43,6 +43,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.graphics.scale
 import androidx.core.graphics.toColorInt
+import com.project.lol.webview.PlayerHost
 import com.project.lol.webview.helpers.AccentTheme
 import com.project.lol.util.Logger
 import com.project.lol.widget.WidgetSource
@@ -75,6 +76,17 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         const val ACTION_REPEAT = "com.project.lol.ACTION_REPEAT"
         const val ACTION_FAVORITE = "com.project.lol.ACTION_FAVORITE"
         const val ACTION_WIDGET_REFRESH = "com.project.lol.ACTION_WIDGET_REFRESH"
+        /** Server Mode: turn it off (notification action). */
+        const val ACTION_SERVER_OFF = "com.project.lol.ACTION_SERVER_OFF"
+        /** Server Mode: start the player without a screen (Spotify opened, or a notification). */
+        const val ACTION_SERVER_START = "com.project.lol.ACTION_SERVER_START"
+        /** Server Mode: the Spotify app just showed up; check auto-connect now. */
+        const val ACTION_SPOTIFY_SEEN = "com.project.lol.ACTION_SPOTIFY_SEEN"
+        /** How often the Spotify Connect connection is checked and pinged. */
+        private const val KEEPALIVE_MS = 20_000L
+        /** The last connection report from the page (window.spoKeepAlive), for the Server screen. */
+        @Volatile var connReport: String = ""
+            private set
 
         private const val CUSTOM_ACTION_TOGGLE_FAV = "toggle_fav"
         private const val CUSTOM_ACTION_TOGGLE_SHUFFLE = "toggle_shuffle"
@@ -206,6 +218,22 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     private var lastActiveContextId: String? = null
     private var isRepeat = "false"
     private var wakeLock: PowerManager.WakeLock? = null
+    private var serverWakeLock: PowerManager.WakeLock? = null
+    @Suppress("DEPRECATION")
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+    private var netCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private var serverOn = false
+    /** ready, connecting, reconnecting, offline, signin or starting: drives the idle server notification. */
+    private var connLabel = "starting"
+    private var lastServerNotif = ""
+    private val playerRestarts = ArrayDeque<Long>()
+    private val keepAliveTick = object : Runnable {
+        override fun run() {
+            try { keepAlive("tick") } catch (e: Exception) { Logger.e(TAG, "keepalive failed", e) }
+            mainHandler.removeCallbacks(this)
+            mainHandler.postDelayed(this, KEEPALIVE_MS)
+        }
+    }
     private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var lastWidgetPushAt = 0L
 
@@ -221,6 +249,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
                 ACTION_REPEAT -> webView?.evaluateJavascript("actRepeat()", null)
                 ACTION_FAVORITE -> webView?.evaluateJavascript("actAddToFav()", null)
                 ACTION_WIDGET_REFRESH -> pushWidgetState(force = true)
+                ACTION_SERVER_OFF -> ServerMode.setOn(this@MediaNotificationService, false)
             }
         }
     }
@@ -322,6 +351,9 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     private var accentCache = 0
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == ServerMode.KEY || key == "LoggedIn") {
+            mainHandler.post { applyServerMode() }
+        }
         if (key == "PaletteSeed" || key == "MaterialYou") {
             accentCache = 0
             mainHandler.post {
@@ -410,7 +442,204 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         }
         getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
             .registerOnSharedPreferenceChangeListener(prefsListener)
+        PlayerHost.headless = headlessHooks
+        applyServerMode()
+        mainHandler.postDelayed(keepAliveTick, 5_000L)
         Logger.i(TAG, "media service ready: session, notification and receivers up")
+    }
+
+    /** The page the service talks to: the screen's player, or the server's own when there's no screen. */
+    private fun player(): WebView? = webView ?: PlayerHost.webView
+
+    /** Turns Server Mode's locks, network watch and screenless player on or off to match the setting. */
+    private fun applyServerMode() {
+        val on = ServerMode.isOn(this)
+        val changed = on != serverOn
+        serverOn = on
+        if (on) {
+            refreshServerLocks()
+            registerNetworkWatch()
+            if (changed) Logger.i(TAG, "server mode on")
+            ensurePlayer("server on")
+        } else {
+            releaseServerLocks()
+            unregisterNetworkWatch()
+            if (changed) Logger.i(TAG, "server mode off")
+            if (PlayerHost.isHeadless) {
+                // Nothing on screen and the server is off: stop everything.
+                PlayerHost.destroy()
+                webView = null
+                stopSelf()
+                return
+            }
+        }
+        PlayerHost.applyPriority(this)
+        lastServerNotif = ""
+        mainHandler.post { showNotification() }
+    }
+
+    /** Builds a player without a screen when Server Mode is on and SpotiOS isn't open. */
+    private fun ensurePlayer(reason: String) {
+        if (!ServerMode.isOn(this)) return
+        if (player() != null || PlayerHost.screens > 0) return
+        if (!ServerMode.isLoggedIn(this)) {
+            connLabel = "signin"
+            return
+        }
+        val now = System.currentTimeMillis()
+        while (playerRestarts.isNotEmpty() && now - playerRestarts.first() > 10 * 60_000L) playerRestarts.removeFirst()
+        if (playerRestarts.size >= 5) {
+            Logger.w(TAG, "player keeps failing, not restarting it again for now")
+            connLabel = "reconnecting"
+            return
+        }
+        playerRestarts.addLast(now)
+        Logger.i(TAG, "starting the server player without a screen ($reason)")
+        val bridge = PlayerHost.bridge?.also { it.attach(null) } ?: com.project.lol.bridge.SpotifyBridge(WeakReference(null))
+        webView = PlayerHost.create(applicationContext, bridge, null, PlayerHost.PLAYER_URL)
+        connLabel = "connecting"
+    }
+
+    private val headlessHooks = object : PlayerHost.Headless {
+        override fun onHeadlessLoginRequired() {
+            Logger.w(TAG, "server player needs sign-in")
+            connLabel = "signin"
+            PlayerHost.destroy()
+            webView = null
+            showNotification()
+        }
+
+        override fun onHeadlessRendererGone() {
+            Logger.w(TAG, "server player renderer gone, restarting it")
+            webView = null
+            connLabel = "reconnecting"
+            mainHandler.postDelayed({ ensurePlayer("renderer gone") }, 3_000L)
+        }
+
+        override fun onHeadlessError(code: Int, description: String) {
+            Logger.w(TAG, "server player load error $code $description")
+            connLabel = "offline"
+            mainHandler.postDelayed({
+                val wv = player() ?: return@postDelayed
+                if (PlayerHost.isHeadless && connLabel == "offline") wv.reload()
+            }, 15_000L)
+        }
+    }
+
+    /**
+     * Every 20 s: pings Spotify's connection from the page (window.spoKeepAlive), which also
+     * reconnects it if it died, and in Server Mode keeps the CPU awake and the screenless
+     * player alive. Spotify's own pings run on page timers that Android slows down in the
+     * background; this tick runs regardless, so SpotiOS stays in other devices' lists.
+     */
+    private fun keepAlive(reason: String) {
+        val server = ServerMode.isOn(this)
+        if (server) refreshServerLocks()
+        val wv = player()
+        if (wv == null) {
+            if (server) ensurePlayer("keepalive")
+            if (server) updateServerNotification()
+            return
+        }
+        if (server && PlayerHost.isHeadless && !ServerMode.isLoggedIn(this)) {
+            headlessHooks.onHeadlessLoginRequired()
+            return
+        }
+        val js = "(function(){try{return window.spoKeepAlive?window.spoKeepAlive($server,'$reason'):'';}catch(e){return '';}})()"
+        wv.evaluateJavascript(js) { raw -> onKeepAliveReport(raw) }
+    }
+
+    private fun onKeepAliveReport(raw: String?) {
+        val text = runCatching { org.json.JSONTokener(raw ?: "").nextValue() as? String }.getOrNull()
+        if (text.isNullOrEmpty()) {
+            // The late bundle isn't in yet (page loading) or the page is on the login screen.
+            if (connLabel != "signin") connLabel = "connecting"
+            updateServerNotification()
+            return
+        }
+        connReport = text
+        val o = runCatching { org.json.JSONObject(text) }.getOrNull() ?: return
+        val state = o.optInt("state", -1)
+        val msgAgo = o.optLong("msgAgo", -1)
+        connLabel = when {
+            !o.optBoolean("signedIn", true) -> "signin"
+            !o.optBoolean("online", true) -> "offline"
+            state == 1 && msgAgo in 0..75_000 -> "ready"
+            state == 0 -> "connecting"
+            o.optString("did") == "reload" -> "reconnecting"
+            else -> "reconnecting"
+        }
+        if (o.optString("did").isNotEmpty()) Logger.i(TAG, "keepalive: ${o.optString("did")} ($text)")
+        updateServerNotification()
+    }
+
+    private fun updateServerNotification() {
+        if (!ServerMode.isOn(this) || currentTitle.isNotEmpty()) return
+        if (lastServerNotif == connLabel) return
+        lastServerNotif = connLabel
+        showNotification()
+    }
+
+    private fun refreshServerLocks() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wl = serverWakeLock ?: pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "spotios:server").also {
+                it.setReferenceCounted(false)
+                serverWakeLock = it
+            }
+            // Re-armed every tick, so it lapses by itself if the ticks ever stop.
+            wl.acquire(5 * 60_000L)
+        } catch (e: Exception) {
+            Logger.e(TAG, "server wake lock failed", e)
+        }
+        if (wifiLock == null && Build.VERSION.SDK_INT < 34) {
+            try {
+                val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                @Suppress("DEPRECATION")
+                wifiLock = wm.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "spotios:server").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "wifi lock failed", e)
+            }
+        }
+    }
+
+    private fun releaseServerLocks() {
+        try { serverWakeLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
+        serverWakeLock = null
+        try { wifiLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
+        wifiLock = null
+    }
+
+    /** When the phone switches networks, check the Spotify connection right away instead of at the next tick. */
+    private fun registerNetworkWatch() {
+        if (netCallback != null) return
+        val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+            private var first = true
+            override fun onAvailable(network: android.net.Network) {
+                if (first) { first = false; return }
+                Logger.i(TAG, "network changed, checking the Spotify connection")
+                mainHandler.postDelayed({ keepAlive("net") }, 2_000L)
+            }
+            override fun onLost(network: android.net.Network) {
+                Logger.i(TAG, "network lost")
+            }
+        }
+        try {
+            cm.registerDefaultNetworkCallback(cb)
+            netCallback = cb
+        } catch (e: Exception) {
+            Logger.e(TAG, "network watch failed", e)
+        }
+    }
+
+    private fun unregisterNetworkWatch() {
+        val cb = netCallback ?: return
+        netCallback = null
+        runCatching { getSystemService(android.net.ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) }
     }
 
     @Suppress("DEPRECATION")
@@ -424,9 +653,18 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Logger.d(TAG, "onStartCommand startId=$startId action=${intent?.action ?: "none"} taskRemoved=$taskRemoved")
-        if (taskRemoved) {
+        val server = ServerMode.isOn(this)
+        if (taskRemoved && !server) {
             stopSelf()
             return START_NOT_STICKY
+        }
+        when (intent?.action) {
+            ACTION_SERVER_START -> mainHandler.post { ensurePlayer("start request") }
+            ACTION_SPOTIFY_SEEN -> mainHandler.post {
+                player()?.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('spotify')", null)
+            }
+            // Restarted by Android after it killed the app: bring the server back.
+            null -> if (server) mainHandler.post { ensurePlayer("restarted by Android") }
         }
         try {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotificationSafe(), getStartForegroundServiceType())
@@ -438,7 +676,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to handle media button intent", e)
         }
-        return START_NOT_STICKY
+        // In Server Mode, ask Android to restart the service if it ever kills the app.
+        return if (server) START_STICKY else START_NOT_STICKY
     }
 
     override fun onGetRoot(
@@ -512,7 +751,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     }
 
     private fun wakeAndRun(js: String) {
-        val wv = webView ?: return
+        val wv = player() ?: return
         Handler(Looper.getMainLooper()).post {
             try {
                 wv.resumeTimers()
@@ -535,6 +774,14 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
 
     override fun onDestroy() {
         releaseWakeLock()
+        releaseServerLocks()
+        unregisterNetworkWatch()
+        mainHandler.removeCallbacks(keepAliveTick)
+        if (PlayerHost.headless === headlessHooks) PlayerHost.headless = null
+        if (PlayerHost.isHeadless) {
+            PlayerHost.destroy()
+            webView = null
+        }
         instance = null
         try { unregisterReceiver(actionReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(bluetoothReceiver) } catch (_: Exception) {}
@@ -646,6 +893,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             addAction(ACTION_REPEAT)
             addAction(ACTION_FAVORITE)
             addAction(ACTION_WIDGET_REFRESH)
+            addAction(ACTION_SERVER_OFF)
             addAction(Intent.ACTION_MEDIA_BUTTON)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -906,6 +1154,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             this, 0, launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val server = ServerMode.isOn(this)
+        if (server && currentTitle.isEmpty()) return buildServerNotification(contentIntent)
 
         val prevAction = NotificationCompat.Action.Builder(
             tintedIcon(R.drawable.ic_skip_prev), getString(R.string.notif_action_previous), getActionPendingIntent(ACTION_PREV)
@@ -953,7 +1203,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(currentTitle.ifEmpty { getString(R.string.app_name) })
             .setContentText(currentArtist)
-            .setSubText(getString(R.string.app_name))
+            .setSubText(if (server) getString(R.string.server_notif_subtext) else getString(R.string.app_name))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(contentIntent)
             .setOngoing(true)
@@ -968,6 +1218,36 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         coverBitmap?.let { builder.setLargeIcon(it) }
 
         return builder.build()
+    }
+
+    /** Server Mode with nothing playing: says whether SpotiOS is ready on Spotify Connect. */
+    private fun buildServerNotification(contentIntent: PendingIntent): Notification {
+        val name = getSharedPreferences("spotilol_prefs", MODE_PRIVATE).getString("SpoDeviceName", null)
+            ?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: "SpotiOS"
+        val text = when (connLabel) {
+            "ready" -> getString(R.string.server_notif_ready, name)
+            "signin" -> getString(R.string.server_notif_signin)
+            "offline" -> getString(R.string.server_notif_offline)
+            "reconnecting" -> getString(R.string.server_notif_reconnecting)
+            else -> getString(R.string.server_notif_connecting)
+        }
+        val off = NotificationCompat.Action.Builder(
+            tintedIcon(R.drawable.ic_pause), getString(R.string.server_notif_turn_off), getActionPendingIntent(ACTION_SERVER_OFF)
+        ).build()
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.server_title))
+            .setContentText(text)
+            .setSubText(if (connLabel == "ready") getString(R.string.server_notif_live) else null)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setColor(accent())
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(off)
+            .build()
     }
 
     private fun getActionPendingIntent(action: String): PendingIntent {
@@ -988,7 +1268,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     }
 
     private fun acquireWakeLock() {
-        if (wakeLock == null) {
+        if (wakeLock?.isHeld != true) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
@@ -1007,7 +1287,13 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         val stopOnSwipe = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
             .getBoolean("SwipeStop", true)
-        if (stopOnSwipe) {
+        if (ServerMode.isOn(this)) {
+            // Server Mode keeps running when SpotiOS is swiped away; the player was handed
+            // over by MainActivity.onDestroy (PlayerHost.release).
+            Logger.i(TAG, "task removed, server keeps running")
+            lastServerNotif = ""
+            mainHandler.post { showNotification() }
+        } else if (stopOnSwipe) {
             taskRemoved = true
             if (::mediaSession.isInitialized) {
                 try { mediaSession.isActive = false } catch (_: Exception) {}

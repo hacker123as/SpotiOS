@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SpotiOS Server Mode -->
+    <string name="server_title">SpotiOS Server</string>
+    <string name="server_watcher_label">SpotiOS Server: start with Spotify</string>
+    <string name="server_notice_channel">SpotiOS Server alerts</string>
+    <string name="server_notice_signin">Open SpotiOS and sign in so the server can start.</string>
+    <string name="server_notice_tap_to_start">Spotify is open. Tap to start SpotiOS Server so you can play on it.</string>
+    <string name="server_notif_subtext">Server mode</string>
+    <string name="server_notif_live">Live</string>
+    <string name="server_notif_ready">Ready on Spotify Connect as “%1$s”</string>
+    <string name="server_notif_connecting">Connecting to Spotify…</string>
+    <string name="server_notif_reconnecting">Reconnecting to Spotify…</string>
+    <string name="server_notif_offline">Waiting for internet</string>
+    <string name="server_notif_signin">Open SpotiOS to sign in</string>
+    <string name="server_notif_turn_off">Turn off</string>
+
+    <!-- Welcome screen: pick a mode -->
+    <string name="onb_mode_title">How do you want to use SpotiOS?</string>
+    <string name="onb_mode_subtitle">You can switch any time in Settings.</string>
+    <string name="onb_mode_normal_title">Normal</string>
+    <string name="onb_mode_normal_desc">The full SpotiOS app. Browse, search and play right here.</string>
+    <string name="onb_mode_server_title">Server mode</string>
+    <string name="onb_mode_server_desc">SpotiOS runs in the background as a speaker on Spotify Connect. Open your normal Spotify app, pick “SpotiOS” from the devices list and play through it.</string>
+    <string name="onb_mode_server_point1">Keeps running when you swipe it away or lock the phone</string>
+    <string name="onb_mode_server_point2">Remembers your device and connects to it on its own</string>
+    <string name="onb_mode_server_point3">Shows what’s playing, and you can still pick songs</string>
+    <string name="onb_continue">Continue</string>
+
+    <!-- Settings -->
+    <string name="settings_section_server">SpotiOS Server</string>
+    <string name="settings_server_info">SpotiOS stays on in the background as a Spotify Connect device. Pick it in the devices list of your normal Spotify app, on this phone or any other device, and the music plays through SpotiOS.</string>
+    <string name="settings_server_mode">Server mode</string>
+    <string name="settings_server_mode_on">On. Ready on Spotify Connect, even when SpotiOS is swiped away</string>
+    <string name="settings_server_mode_off">Off. SpotiOS works as a normal app</string>
+    <string name="settings_server_with_spotify">Start with Spotify</string>
+    <string name="settings_server_with_spotify_on">SpotiOS starts when Spotify plays on this phone</string>
+    <string name="settings_server_with_spotify_needs_access">Needs notification access. Tap to allow it</string>
+    <string name="settings_server_with_spotify_off">Off</string>
+    <string name="settings_server_battery_hint">Server mode works best with battery optimization off for SpotiOS. It keeps the phone lightly awake so Spotify can always reach it, which uses some battery.</string>
+</resources>

@@ -179,6 +179,7 @@ class SpotifyWebViewClient(
             add(if (isGoogle) GoogleSpoof.CONTENT else BrowserSpoof.CONTENT)
             add(FetchOverride.CONTENT)
             add(AdStateHook.CONTENT)
+            add(ConnectKeepAlive.CONTENT)
             add(AdCleaner.CONTENT)
             if (blockSW) add(WorkerNeutralize.CONTENT)
             add(GaBlocker.CONTENT)
@@ -341,7 +342,9 @@ class SpotifyWebViewClient(
         val playerMode = prefs.getString("PlayerMode", "spotilol") ?: "spotilol"
         val useProxy = prefs.getString("ConnectionMode", "normal") == "proxy"
         val debugOverlay = Logger.isEnabled()
-        val takeControl = prefs.getBoolean("TakeControl", true)
+        val server = com.project.lol.service.ServerMode.isOn(view.context)
+        // Server Mode waits for other devices to send music; it never grabs playback at launch.
+        val takeControl = prefs.getBoolean("TakeControl", true) && !server
         val hideEmptyPlayer = prefs.getBoolean("HideEmptyPlayer", true)
         val playlistSortEnabled = prefs.getBoolean("PlaylistSortEnabled", true)
         val showScrollbar = prefs.getBoolean("ShowScrollbar", true)
@@ -412,6 +415,8 @@ class SpotifyWebViewClient(
             append(SpotiOSUi.content(prefs.getBoolean("SpoTabBar", true), prefs.getBoolean("SpoArtWall", true), prefs.getBoolean("SpoLrc", true)))
             append(";\n")
             append(spoExtrasJs(prefs, full = true))
+            append(";\n")
+            append(ServerScreen.content(server))
         }
         val cleanJs = JsUtils.stripConsoleLogs(js) + "\n" +
                 buildAmoledJs(amoledEnabled) + "\n" +
@@ -496,9 +501,10 @@ class SpotifyWebViewClient(
                     val on = prefs.getBoolean("SpoTabBar", true)
                     wv.evaluateJavascript("if(window.spoSetTabs) window.spoSetTabs($on);", null)
                 }
-                "TakeControl" -> {
-                    val on = prefs.getBoolean("TakeControl", true)
-                    wv.evaluateJavascript("window.__splTakeControl=$on;", null)
+                "TakeControl", com.project.lol.service.ServerMode.KEY -> {
+                    val server = com.project.lol.service.ServerMode.isOn(wv.context)
+                    val on = prefs.getBoolean("TakeControl", true) && !server
+                    wv.evaluateJavascript("window.__splTakeControl=$on;if(window.spoSetServer&&!!window.__spoServer!==$server)window.spoSetServer($server);", null)
                 }
                 "BlockServiceWorker" -> {
                     if (prefs.getBoolean("BlockServiceWorker", true)) {

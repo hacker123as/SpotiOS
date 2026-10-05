@@ -65,6 +65,9 @@ import compose.icons.TablerIcons
 import compose.icons.tablericons.Battery
 import compose.icons.tablericons.Bell
 import compose.icons.tablericons.Bluetooth
+import compose.icons.tablericons.Cast
+import compose.icons.tablericons.Check
+import compose.icons.tablericons.DeviceMobile
 import compose.icons.tablericons.CircleCheck
 import compose.icons.tablericons.Download
 import compose.icons.tablericons.Message
@@ -76,10 +79,11 @@ private val Ink2 = Color.White.copy(alpha = 0.62f)
 private val GlassFill = Color.White.copy(alpha = 0.07f)
 private val GlassRim = Color.White.copy(alpha = 0.12f)
 
-const val ONBOARDING_STEPS = 3
+const val ONBOARDING_STEPS = 4
 const val STEP_WELCOME = 0
-const val STEP_PERMISSIONS = 1
-const val STEP_BATTERY = 2
+const val STEP_MODE = 1
+const val STEP_PERMISSIONS = 2
+const val STEP_BATTERY = 3
 
 fun isIgnoringBatteryOptimizations(context: Context): Boolean {
     val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
@@ -99,13 +103,16 @@ fun batteryOptimizationIntent(context: Context): Intent {
  * First-launch flow: welcome, permissions, then turning off battery
  * optimization so playback and downloads keep running with the screen off.
  * [onlyBattery] shows just the last step (for people who set up an older version).
+ * [single] hides the page dots when only one step is shown (the mode choice after an update).
  */
 @Composable
 fun OnboardingFlow(
     modifier: Modifier = Modifier,
     step: Int,
     onlyBattery: Boolean,
+    single: Boolean = false,
     onNext: () -> Unit,
+    onPickMode: (server: Boolean) -> Unit,
     onRequestPermissions: () -> Unit,
     onFinish: () -> Unit,
 ) {
@@ -130,7 +137,7 @@ fun OnboardingFlow(
             .systemBarsPadding()
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
-            if (!onlyBattery) {
+            if (!onlyBattery && !single) {
                 Spacer(Modifier.height(16.dp))
                 PageDots(step)
             }
@@ -146,6 +153,7 @@ fun OnboardingFlow(
             ) { s ->
                 when (s) {
                     STEP_WELCOME -> WelcomePage(onNext)
+                    STEP_MODE -> ModePage(onPickMode)
                     STEP_PERMISSIONS -> PermissionsPage(onRequestPermissions, onNext)
                     else -> BatteryPage(onFinish)
                 }
@@ -237,6 +245,81 @@ private fun WelcomePage(onNext: () -> Unit) {
         },
         actions = { PrimaryButton(stringResource(R.string.onb_get_started), onNext) }
     )
+}
+
+/** Normal app, or SpotiOS Server Mode (a Spotify Connect speaker that runs in the background). */
+@Composable
+private fun ModePage(onPick: (server: Boolean) -> Unit) {
+    var server by remember { mutableStateOf(false) }
+    Page(
+        hero = { HeroIcon(if (server) TablerIcons.Cast else TablerIcons.DeviceMobile) },
+        title = stringResource(R.string.onb_mode_title),
+        subtitle = stringResource(R.string.onb_mode_subtitle),
+        content = {
+            ModeCard(
+                selected = !server,
+                icon = TablerIcons.DeviceMobile,
+                title = stringResource(R.string.onb_mode_normal_title),
+                desc = stringResource(R.string.onb_mode_normal_desc),
+                points = emptyList()
+            ) { server = false }
+            Spacer(Modifier.height(12.dp))
+            ModeCard(
+                selected = server,
+                icon = TablerIcons.Cast,
+                title = stringResource(R.string.onb_mode_server_title),
+                desc = stringResource(R.string.onb_mode_server_desc),
+                points = listOf(
+                    stringResource(R.string.onb_mode_server_point1),
+                    stringResource(R.string.onb_mode_server_point2),
+                    stringResource(R.string.onb_mode_server_point3)
+                )
+            ) { server = true }
+        },
+        actions = { PrimaryButton(stringResource(R.string.onb_continue)) { onPick(server) } }
+    )
+}
+
+@Composable
+private fun ModeCard(selected: Boolean, icon: ImageVector, title: String, desc: String, points: List<String>, onClick: () -> Unit) {
+    val rim by animateColorAsState(if (selected) Green else GlassRim, tween(220), label = "rim")
+    val fill by animateColorAsState(if (selected) Green.copy(alpha = 0.10f) else GlassFill, tween(220), label = "fill")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(fill)
+            .border(if (selected) 2.dp else 1.dp, rim, RoundedCornerShape(22.dp))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Green.copy(alpha = if (selected) 0.22f else 0.12f)),
+            contentAlignment = Alignment.Center
+        ) { Icon(icon, contentDescription = null, tint = Green, modifier = Modifier.size(21.dp)) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(Modifier.height(3.dp))
+            Text(desc, color = Ink2, fontSize = 13.sp, lineHeight = 18.sp)
+            points.forEach { p ->
+                Spacer(Modifier.height(7.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(TablerIcons.Check, contentDescription = null, tint = Green, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text(p, color = Color.White.copy(alpha = 0.82f), fontSize = 12.5.sp, lineHeight = 16.sp)
+                }
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(
+            Modifier.size(22.dp).clip(CircleShape).border(2.dp, if (selected) Green else Color.White.copy(alpha = 0.3f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) Box(Modifier.size(12.dp).clip(CircleShape).background(Green))
+        }
+    }
 }
 
 @Composable

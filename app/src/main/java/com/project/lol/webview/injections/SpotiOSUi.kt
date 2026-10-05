@@ -1000,8 +1000,8 @@ function update(){
   if(src&&src!==lastArt){lastArt=src;byId('spo-art').src=src;byId('spo-bgimg').src=src;}
   byId('spo-title').textContent=txt(byId('spl-track'))||'Not playing';
   byId('spo-artist').textContent=txt(byId('spl-artist'));
-  var playing=false;
-  try{playing=!!(window.splIsPlayingSticky&&window.splIsPlayingSticky());}catch(e){}
+  var playing=false,pend=window.__spoPend;
+  try{playing=!!(window.splIsPlayingSticky&&window.splIsPlayingSticky())||!!pend;}catch(e){}
   if(playing!==lastPlay){
     lastPlay=playing;
     byId('spo-play').innerHTML=playing?I.pause:I.play;
@@ -1022,9 +1022,9 @@ function update(){
   de.classList.toggle('show',!!dv);
   if(sheet.classList.contains('lyr')){lyrLoad();lyrTick();}
   if(!scrubbing){
-    var dur=secs(txt(qs('[data-testid="playback-duration"]')));
-    var pos=secs(txt(qs('[data-testid="playback-position"]')));
-    var pct=progressPct();if(pct===null)pct=dur?pos/dur:0;
+    var dur=secs(pend?pend.dur:txt(qs('[data-testid="playback-duration"]')));
+    var pos=pend?0:secs(txt(qs('[data-testid="playback-position"]')));
+    var pct=pend?0:progressPct();if(pct===null)pct=dur?pos/dur:0;
     var f=byId('spo-fill');if(f)f.style.transform='scaleX('+pct+')';
     byId('spo-pos').textContent=fmt(pos);byId('spo-rem').textContent='-'+fmt(Math.max(0,dur-pos));
   }
@@ -1087,7 +1087,9 @@ function devType(t){
   return m[String(t||'').toLowerCase()]||'Spotify Connect';
 }
 function myName(){return window.__spoDeviceName||'SpotiOS';}
-function isMine(d){return !!d&&((window.spotDevId&&d.id===window.spotDevId)||d.name===myName());}
+/* __spoMyId comes from this player's own registration (ConnectKeepAlive); spotDevId can end
+   up holding the other device's id after a transfer, so it is only a fallback. */
+function isMine(d){var me=window.__spoMyId||window.spotDevId;return !!d&&((me&&d.id===me)||d.name===myName());}
 function panMsg(h){var b=byId('spo-pan-b');if(b)b.innerHTML='<div class="spo-pan-msg">'+h+'</div>';}
 function panFail(k,e){
   var m=String(e&&e.message||'');
@@ -1270,6 +1272,7 @@ window.spoShare=function(){
     var c=row.querySelector('[aria-colindex="1"]')||row.firstElementChild;
     return c?c.querySelector('button'):null;
   }
+  function spotifyTitle(){return txt(qs('a[data-testid=context-item-link]'));}
   document.addEventListener('click',function(e){
     if(e.defaultPrevented||!e.isTrusted||window.__spoTapPlayOff)return;
     var row=e.target.closest&&e.target.closest('[data-testid=tracklist-row]');
@@ -1281,17 +1284,80 @@ window.spoShare=function(){
     if(row===lastRow&&now-lastAt<600)return;
     lastRow=row;lastAt=now;
     haptic();
-    var before=txt(byId('spl-track'));
+    var before=spotifyTitle();
     var title=txt(row.querySelector('a[href*="/track/"],a[href*="/episode/"]')||row.querySelector('[dir=auto]'));
     row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,view:window,detail:2}));
+    showPending(row,title);
     /* fallback only when nothing changed at all, so it can never pause a song */
     setTimeout(function(){
       if(!row.isConnected)return;
-      var cur=txt(byId('spl-track'));
+      var cur=spotifyTitle();
       if(cur!==before||(title&&cur===title))return;
       var b=rowPlayButton(row);if(b)b.click();
     },1200);
   },true);
+
+  /* Show the tapped song in the player right away. Spotify takes a moment to load it,
+     and the player used to keep showing the old song until then. splUpdate keeps this
+     until Spotify's own player moves off the old song (or 8 s pass and nothing came). */
+  function showPending(row,title){
+    var tk=byId('spl-track');if(!tk||!title)return;
+    var cur=spotifyTitle();if(title===cur)return;
+    var art=row.querySelector('a[href*="/artist/"],a[href*="/show/"]');
+    var img=row.querySelector('img');
+    if(!img&&/^\/album\//.test(location.pathname))img=qs('main img');
+    var dur='',cells=row.querySelectorAll('[aria-colindex]');
+    for(var i=cells.length-1;i>=0&&!dur;i--){var m=txt(cells[i]).match(/(?:^|\s)(\d{1,2}:\d\d(?::\d\d)?)\s*$/);if(m)dur=m[1];}
+    var ar=byId('spl-artist'),ci=byId('spl-cover-img');
+    window.__spoPend={t:title,old:cur,until:Date.now()+8000,dur:dur,
+      prev:{t:tk.textContent,a:ar?ar.textContent:'',c:ci&&ci.getAttribute('src')||''}};
+    tk.textContent=title;
+    if(ar)ar.textContent=art?txt(art):'';
+    if(ci)ci.src=img&&img.src||'';
+    var f=byId('spl-fill');if(f)f.style.transform='scaleX(0)';
+    var fe=byId('spl-fill-edge');if(fe)fe.style.transform='scaleX(0)';
+    var hd=byId('spl-handle');if(hd)hd.style.left='0%';
+    var ps=byId('spl-pos');if(ps)ps.textContent='0:00';
+    var ds=byId('spl-dur');if(ds&&dur)ds.textContent=dur;
+    try{update();}catch(e){}
+  }
+})();
+
+/* ---------- warm up the audio connection ----------
+   When a finger lands on a song (or a play button), open the connection to Spotify's
+   audio servers right away, so the song's audio doesn't wait for a fresh handshake. The
+   servers this account actually streams from are learned as songs play. */
+(function(){
+  if(window.__spoWarm)return;window.__spoWarm=true;
+  var hosts=[];
+  try{hosts=JSON.parse(localStorage.getItem('spoAudioHosts')||'[]')||[];}catch(e){}
+  if(!hosts.length)hosts=['https://audio-ak-spotify-com.akamaized.net','https://audio4-ak-spotify-com.akamaized.net','https://audio-fa.scdn.co'];
+  try{
+    new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(en){
+        var u=String(en.name||'');if(u.indexOf('/audio/')===-1)return;
+        var o='';try{o=new URL(u).origin;}catch(e){return;}
+        if(!o||hosts[0]===o)return;
+        hosts=[o].concat(hosts.filter(function(h){return h!==o;})).slice(0,4);
+        try{localStorage.setItem('spoAudioHosts',JSON.stringify(hosts));}catch(e){}
+      });
+    }).observe({type:'resource',buffered:true});
+  }catch(e){}
+  var at=0;
+  function warm(){
+    var n=Date.now();if(n-at<4000)return;at=n;
+    hosts.concat(['https://seektables.scdn.co']).forEach(function(h){
+      var id='spo-pc-'+h.replace(/\W/g,''),old=byId(id);
+      if(old)old.remove();
+      var l=document.createElement('link');l.id=id;l.rel='preconnect';l.href=h;l.crossOrigin='anonymous';
+      (document.head||document.documentElement).appendChild(l);
+    });
+  }
+  window.spoWarmAudio=warm;
+  document.addEventListener('touchstart',function(e){
+    var t=e.target;if(!t||!t.closest)return;
+    if(t.closest('[data-testid=tracklist-row],[data-testid=play-button],[data-testid=control-button-playpause],[data-encore-id=card],#spotilolPlayerControls,#spoNP,#spoSrv,#ss-sheet'))warm();
+  },{passive:true,capture:true});
 })();
 
 /* ---------- recover from Spotify's "Something went wrong" ----------

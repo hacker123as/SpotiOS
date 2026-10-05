@@ -101,8 +101,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Popup
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import androidx.webkit.ProxyConfig
-import androidx.webkit.ProxyController
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import androidx.webkit.WebSettingsCompat
@@ -112,6 +110,8 @@ import com.project.lol.offline.DownloadManager
 import com.project.lol.profile.ProfileManager
 import com.project.lol.proxy.LocalProxyManager
 import com.project.lol.service.MediaNotificationService
+import com.project.lol.service.ServerMode
+import com.project.lol.webview.PlayerHost
 import com.project.lol.ui.components.ChangelogDialog
 import com.project.lol.ui.components.SettingsDialog
 import com.project.lol.ui.theme.SpotifyTheme
@@ -119,7 +119,6 @@ import com.project.lol.util.BuildInfo
 import com.project.lol.util.ChangelogPrefs
 import com.project.lol.util.Logger
 import com.project.lol.util.UpdateChecker
-import com.project.lol.webview.SpotifyWebChromeClient
 import com.project.lol.webview.SpotifyWebViewClient
 import com.project.lol.webview.helpers.DevLogPrelude
 import com.project.lol.webview.helpers.LyricsTheme
@@ -132,7 +131,6 @@ import compose.icons.tablericons.Settings
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.Executors
 import kotlin.math.min
 import org.json.JSONObject
 import androidx.core.content.edit
@@ -145,7 +143,7 @@ import com.project.lol.webview.helpers.LiquidGlassTheme
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PlayerHost.Owner {
 
     companion object {
         private const val TAG = "main"
@@ -195,6 +193,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: SharedPreferences
 
     private var changelogOnUpdate = false
+    /** Set when SpotiOS restarts itself (account switch, clear data...): never hand the old player on. */
+    private var restarting = false
+    private var countedScreen = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -204,6 +205,8 @@ class MainActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = false
         }
         super.onCreate(savedInstanceState)
+        PlayerHost.screens++
+        countedScreen = true
 
 
         prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
@@ -433,9 +436,9 @@ class MainActivity : ComponentActivity() {
                                 .padding(innerPadding)
                         ) {
                             if (serviceEnabled) {
-                            val bridge = remember {
-                                SpotifyBridge(WeakReference(this@MainActivity))
-                            }
+                            // In Server Mode the player (and its bridge) may still be running from
+                            // before SpotiOS was swiped away: carry on with the same one.
+                            val bridge = remember { PlayerHost.bridgeFor(this@MainActivity) }
                             bridge.onJs = { js -> webView?.evaluateJavascript(js, null) }
 
                             bridge.onTimerDialogRequest = {
@@ -481,95 +484,19 @@ class MainActivity : ComponentActivity() {
 
                             AndroidView(
                                 factory = { context ->
-                                    WebView(context).apply {
-                                        layoutParams = ViewGroup.LayoutParams(
-                                            ViewGroup.LayoutParams.MATCH_PARENT,
-                                            ViewGroup.LayoutParams.MATCH_PARENT
-                                        )
-
-                                        webView = this
-
-                                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
-
-                                        settings.apply {
-                                            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
-                                            javaScriptEnabled = true
-                                            domStorageEnabled = true
-                                            useWideViewPort = true
-                                            loadWithOverviewMode = true
-                                            setSupportZoom(true)
-                                            builtInZoomControls = true
-                                            displayZoomControls = false
-                                            allowFileAccess = false
-                                            allowContentAccess = false
-                                            mediaPlaybackRequiresUserGesture = false
-                                            setSupportMultipleWindows(true)
-                                            javaScriptCanOpenWindowsAutomatically = true
-                                            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                                            setGeolocationEnabled(false)
-                                            @Suppress("DEPRECATION")
-                                            saveFormData = false
-                                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                                    val kept = PlayerHost.adopt(this@MainActivity, this@MainActivity)
+                                    if (kept != null) {
+                                        webView = kept
+                                        MediaNotificationService.webView = kept
+                                        pendingLink?.let { link ->
+                                            pendingLink = null
+                                            kept.post { navigateSpotifyLink(link) }
                                         }
-
-                                        setInitialScale(100)
-                                        setBackgroundColor(0xFF000000.toInt())
-
-                                        if (WebViewFeature.isFeatureSupported(WebViewFeature.BACK_FORWARD_CACHE)) {
-                                            WebSettingsCompat.setBackForwardCacheEnabled(settings, true)
-                                        }
-
-                                        addJavascriptInterface(bridge, "AndBridge")
-                                        webChromeClient = SpotifyWebChromeClient(
-                                            onProgressChanged = { progress ->
-                                                loadingProgress.intValue = progress
-                                            },
-                                            onShowCustomView = { view, callback ->
-                                                handleCustomViewShown(view, callback)
-                                            },
-                                            onHideCustomView = {
-                                                handleCustomViewHidden()
-                                            }
-                                        )
-
-                                        val spotifyClient = SpotifyWebViewClient(
-                                            onLoginRequired = {
-                                                loadUrl("https://accounts.spotify.com/login")
-                                            },
-                                            onRenderProcessGone = {
-                                                runOnUiThread {
-                                                    webViewError.value = null
-                                                    destroyWebView()
-                                                }
-                                            },
-                                            onWebViewError = { code, desc ->
-                                                webViewError.value = code to desc
-                                            },
-                                            onUserScriptLink = { url ->
-                                                runOnUiThread { pendingScript.value = url }
-                                            }
-                                        )
-                                        webViewClient = spotifyClient
-                                        // Before the first loadUrl, so it applies to the first page.
-                                        spotifyClient.installDocumentStartScripts(this)
-
-                                        val executor = Executors.newSingleThreadExecutor()
-                                        if (useProxy && LocalProxyManager.isRunning) {
-                                            val proxyConfig = ProxyConfig.Builder()
-                                                .addProxyRule("localhost:${LocalProxyManager.port}")
-                                                .build()
-                                            ProxyController.getInstance().setProxyOverride(
-                                                proxyConfig,
-                                                executor,
-                                                { }
-                                            )
-                                        } else {
-                                            ProxyController.getInstance().clearProxyOverride(executor, { })
-                                        }
-
+                                        kept
+                                    } else {
                                         val target = pendingLink
-                                            ?: if (loggedIn) "https://open.spotify.com/"
-                                            else "https://accounts.spotify.com/login"
+                                            ?: if (loggedIn) PlayerHost.PLAYER_URL
+                                            else PlayerHost.LOGIN_URL
                                         pendingLink = null
                                         Logger.i(
                                             TAG,
@@ -577,7 +504,7 @@ class MainActivity : ComponentActivity() {
                                                 WebViewFeature.isFeatureSupported(WebViewFeature.BACK_FORWARD_CACHE) +
                                                 " proxy=$useProxy target=$target"
                                         )
-                                        loadUrl(target)
+                                        PlayerHost.create(context, bridge, this@MainActivity, target).also { webView = it }
                                     }
                                 },
                                 modifier = Modifier
@@ -701,6 +628,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // PlayerHost.Owner: the player's page events while this screen shows it.
+    override fun onPlayerProgress(progress: Int) {
+        loadingProgress.intValue = progress
+    }
+
+    override fun onPlayerShowCustomView(view: View?, callback: android.webkit.WebChromeClient.CustomViewCallback?) {
+        handleCustomViewShown(view, callback)
+    }
+
+    override fun onPlayerHideCustomView() {
+        handleCustomViewHidden()
+    }
+
+    override fun onPlayerLoginRequired(view: WebView) {
+        view.loadUrl(PlayerHost.LOGIN_URL)
+    }
+
+    override fun onPlayerRendererGone() {
+        webViewError.value = null
+        destroyWebView()
+    }
+
+    override fun onPlayerError(code: Int, description: String) {
+        webViewError.value = code to description
+    }
+
+    override fun onPlayerUserScriptLink(url: String) {
+        runOnUiThread { pendingScript.value = url }
+    }
+
     /** open.spotify.com links, spotify: URIs and Spotify links shared as text. */
     private fun extractSpotifyLink(intent: Intent?): String? =
         com.project.lol.util.IncomingLinks.spotifyUrl(intent)
@@ -719,6 +676,7 @@ class MainActivity : ComponentActivity() {
 
     private fun switchConnectionMode(mode: String) {
         Logger.i(TAG, "connection mode -> $mode, restarting app")
+        restarting = true
         prefs.edit().putString("ConnectionMode", mode).apply()
         prefs.edit().putBoolean("ServiceOn", false).apply()
         stopService(Intent(this, MediaNotificationService::class.java))
@@ -732,6 +690,7 @@ class MainActivity : ComponentActivity() {
 
     private fun switchOfflineMode(enabled: Boolean) {
         Logger.i(TAG, "offline mode -> $enabled, restarting app")
+        restarting = true
         prefs.edit().putBoolean("OfflineMode", enabled).apply()
         stopService(Intent(this, MediaNotificationService::class.java))
         val intent = Intent(this, SplashActivity::class.java).apply {
@@ -754,6 +713,7 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, getString(R.string.main_profile_load_failed), Toast.LENGTH_SHORT).show()
             return
         }
+        restarting = true
         val intent = Intent(this, SplashActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -778,6 +738,7 @@ class MainActivity : ComponentActivity() {
 
     private fun clearAllData() {
         Logger.w(TAG, "clearing all data (cache, storage, cookies, login state)")
+        restarting = true
         val wv = WebView(applicationContext)
         wv.clearCache(true)
         wv.clearHistory()
@@ -1389,6 +1350,7 @@ class MainActivity : ComponentActivity() {
             it.removeAllViews()
             it.destroy()
         }
+        PlayerHost.forget(webView)
         webView = null
         MediaNotificationService.webView = null
     }
@@ -1583,13 +1545,29 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (countedScreen) {
+            countedScreen = false
+            PlayerHost.screens--
+        }
         prefs.unregisterOnSharedPreferenceChangeListener(spoPrefListener)
-        Logger.i(TAG, "activity destroyed, tearing down webview")
         cancelSleepTimer()
         pipVideoView = null
         pipVideoCallback = null
         pipVideoActive.value = false
         hidePipOverlay()
+        // Server Mode: SpotiOS was swiped away (or closed), but the server keeps playing and
+        // stays on Spotify Connect. Hand the player to the media service instead of destroying it.
+        val keep = !restarting && webView != null && ServerMode.isOn(this) &&
+            MediaNotificationService.instance != null && prefs.getBoolean("ServiceOn", true)
+        if (keep && PlayerHost.release(this, keep = true)) {
+            Logger.i(TAG, "activity destroyed, server mode keeps the player running")
+            webView = null
+            serviceStarted = false
+            super.onDestroy()
+            return
+        }
+        Logger.i(TAG, "activity destroyed, tearing down webview")
+        PlayerHost.forget(webView)
         webView?.let {
             it.stopLoading()
             it.clearHistory()

@@ -373,25 +373,38 @@ object SpotilolPlayer {
                         var ly=document.getElementById('spl-lyrics');
                         var tm=document.getElementById('spl-timer');
 
+                        // A song that was just tapped shows here at once (window.spoShowPending);
+                        // keep it until Spotify's own player moves off the old song.
+                        var pend=window.__spoPend;
+                        if(pend){
+                            var curEl=document.querySelector('a[data-testid=context-item-link]');
+                            var moved=!!curEl&&(curEl.textContent||'').trim()!==pend.old;
+                            if(moved||Date.now()>pend.until){
+                                // Nothing came and Spotify shows no song to go back to: put back what was shown.
+                                if(!moved&&!curEl&&pend.prev&&tk){tk.textContent=pend.prev.t;if(ar)ar.textContent=pend.prev.a;if(ci)ci.setAttribute('src',pend.prev.c);}
+                                pend=window.__spoPend=null;
+                            }
+                        }
+
                         var npb=document.querySelector('[data-testid="now-playing-widget"]');
                         var imgEl=npb?npb.querySelector('img[data-testid="cover-art-image"]'):null;
-                        if(ci&&imgEl&&imgEl.src&&ci.src!==imgEl.src) ci.src=imgEl.src;
+                        if(!pend&&ci&&imgEl&&imgEl.src&&ci.src!==imgEl.src) ci.src=imgEl.src;
 
                         var trackEl=document.querySelector('a[data-testid=context-item-link]');
-                        if(tk&&trackEl&&trackEl.textContent&&tk.textContent!==trackEl.textContent) tk.textContent=trackEl.textContent;
+                        if(!pend&&tk&&trackEl&&trackEl.textContent&&tk.textContent!==trackEl.textContent) tk.textContent=trackEl.textContent;
 
                         var artistEl=document.querySelector('a[data-testid=context-item-info-artist]');
                         if(!artistEl) artistEl=document.querySelector('a[data-testid=context-item-info-show]');
-                        if(ar&&artistEl&&tk.textContent!=='No track') ar.textContent=artistEl.textContent||'';
+                        if(!pend&&ar&&artistEl&&tk.textContent!=='No track'&&ar.textContent!==(artistEl.textContent||'')) ar.textContent=artistEl.textContent||'';
 
                         var rg=document.querySelector('[data-testid="playback-progressbar"] input[type=range]');
                         if(pp||ppm){
-                            var isPlaying=window.splIsPlayingSticky();
+                            var isPlaying=window.splIsPlayingSticky()||!!pend;
                             var ph=isPlaying
                                 ?'<svg viewBox="0 0 16 16"><path fill="currentColor" d="M2.7 1a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7zm8 0a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7z"/></svg>'
                                 :'<svg viewBox="0 0 16 16"><path fill="currentColor" d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"/></svg>';
-                            if(pp)pp.innerHTML=ph;
-                            if(ppm)ppm.innerHTML=ph;
+                            if(pp&&pp.__splPh!==isPlaying){pp.innerHTML=ph;pp.__splPh=isPlaying;}
+                            if(ppm&&ppm.__splPh!==isPlaying){ppm.innerHTML=ph;ppm.__splPh=isPlaying;}
                         }
                         if(sh){
                             var sst=splShuffleState();
@@ -457,7 +470,7 @@ object SpotilolPlayer {
                         if(dcb) dcb.style.display = window.__splDlActive ? '' : 'none';
 
                         var pbEl=document.querySelector('[data-testid="playback-progressbar"] [data-testid="progress-bar"]');
-                        if(pbEl){
+                        if(pbEl&&!pend){
                             var cs=getComputedStyle(pbEl);
                             var tr=cs.getPropertyValue('--progress-bar-transform');
                             if(tr){
@@ -469,8 +482,8 @@ object SpotilolPlayer {
                         }
                         var posEl=document.querySelector('[data-testid="playback-position"]');
                         var durEl=document.querySelector('[data-testid="playback-duration"]');
-                        if(ps&&posEl) ps.textContent=posEl.textContent;
-                        if(ds&&durEl) ds.textContent=durEl.textContent;
+                        if(ps&&posEl&&!pend&&ps.textContent!==posEl.textContent) ps.textContent=posEl.textContent;
+                        if(ds&&durEl&&!pend&&ds.textContent!==durEl.textContent) ds.textContent=durEl.textContent;
                         splApplyEmpty();
                     };
                     function formatTime(ms){

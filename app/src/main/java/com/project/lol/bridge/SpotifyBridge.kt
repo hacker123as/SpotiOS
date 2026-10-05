@@ -1,12 +1,15 @@
 package com.project.lol.bridge
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import com.project.lol.R
 import com.project.lol.service.MediaNotificationService
+import com.project.lol.service.ServerMode
 import com.project.lol.webview.helpers.AdIdStore
 import org.json.JSONArray
 import org.json.JSONObject
@@ -14,6 +17,7 @@ import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.Executors
 import com.project.lol.offline.DownloadManager
 import com.project.lol.util.Logger
 
@@ -34,9 +38,23 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
 
         private const val TAG = "bridge"
         private const val CALL = "bridge.call"
+
+        /** Threads for nFetchAsync: Spotify Connect requests run here, several at once, never on the page's JS thread. */
+        private val NET_POOL = Executors.newFixedThreadPool(4) { r ->
+            Thread(r, "spo-nfetch").apply { isDaemon = true }
+        }
+        private val MAIN = Handler(Looper.getMainLooper())
     }
 
-    private val activityRef = activityRef
+    @Volatile private var activityRef = activityRef
+
+    /** Points the bridge at the screen now showing the player, or null while it runs without one. */
+    fun attach(activity: Activity?) {
+        activityRef = WeakReference(activity)
+    }
+
+    private fun appContext(): android.content.Context? =
+        activityRef.get()?.applicationContext ?: com.project.lol.SpotilolApp.context
 
     /** Runs JS in the Spotify WebView; set by MainActivity. */
     var onJs: ((String) -> Unit)? = null
@@ -55,14 +73,77 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
 
     @JavascriptInterface
     fun loginDetected() {
-        val activity = activityRef.get() ?: return
+        val ctx = appContext() ?: return
         Logger.i(TAG, "login detected")
-        activity.getSharedPreferences("spotilol_prefs", Activity.MODE_PRIVATE)
+        ctx.getSharedPreferences("spotilol_prefs", Activity.MODE_PRIVATE)
             .edit()
             .putBoolean("LoggedIn", true)
             .apply()
-        activity.runOnUiThread {
+        activityRef.get()?.runOnUiThread {
             onLoginDetected?.invoke()
+        }
+    }
+
+    /** Server Mode settings and phone facts for the Server screen (see ServerMode.statusJson). */
+    @JavascriptInterface
+    fun serverStatus(): String {
+        val ctx = appContext() ?: return "{}"
+        return ServerMode.statusJson(ctx)
+    }
+
+    @JavascriptInterface
+    fun setServerMode(on: Boolean) {
+        val ctx = appContext() ?: return
+        ServerMode.setOn(ctx, on)
+    }
+
+    @JavascriptInterface
+    fun setStartWithSpotify(on: Boolean) {
+        val ctx = appContext() ?: return
+        ServerMode.setStartWithSpotify(ctx, on)
+        // Ask for notification access the first time it's needed.
+        if (on && !ServerMode.hasNotificationAccess(ctx)) openNotificationAccess()
+    }
+
+    @JavascriptInterface
+    fun openNotificationAccess() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            runCatching { activity.startActivity(ServerMode.notificationAccessIntent(activity)) }
+                .onFailure { runCatching { activity.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)) } }
+        }
+    }
+
+    @JavascriptInterface
+    fun openBatterySettings() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            runCatching { activity.startActivity(com.project.lol.ui.onboarding.batteryOptimizationIntent(activity)) }
+                .onFailure { runCatching { activity.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)) } }
+        }
+    }
+
+    /** Back on the Server screen: leave SpotiOS running in the background, like Home. */
+    @JavascriptInterface
+    fun moveToBack() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread { activity.moveTaskToBack(true) }
+    }
+
+    /** Opens the Spotify app (Server screen > Open Spotify), or its store page. */
+    @JavascriptInterface
+    fun openSpotifyApp() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            val launch = activity.packageManager.getLaunchIntentForPackage(ServerMode.SPOTIFY_PACKAGE)
+            if (launch != null) {
+                runCatching { activity.startActivity(launch) }
+            } else {
+                runCatching {
+                    activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://play.google.com/store/apps/details?id=" + ServerMode.SPOTIFY_PACKAGE)))
+                }
+            }
         }
     }
 
@@ -330,6 +411,33 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     fun cancelDownload() {
         Logger.i(CALL, "cancelDownload")
         DownloadManager.cancelAll()
+    }
+
+    /**
+     * Like [nFetch], but returns at once and hands the response to the page later through
+     * window.__nfCb(id, raw). nFetch blocks the page's JS thread for the whole round trip, and
+     * starting a song sends several Spotify Connect requests, so each one used to hold up the
+     * rest of the player (and the next request) while it waited. Returns false when there is no
+     * player to answer to, and the page then falls back to nFetch.
+     */
+    @JavascriptInterface
+    fun nFetchAsync(id: String, url: String, optsJson: String?): Boolean {
+        val wv = com.project.lol.webview.PlayerHost.webView ?: return false
+        return try {
+            NET_POOL.execute {
+                val raw = nFetch(url, optsJson)
+                val js = "window.__nfCb&&window.__nfCb(" + JSONObject.quote(id) + "," + JSONObject.quote(raw) + ")"
+                // Not wv.post: a View only runs posted work while it is on screen, and in Server
+                // Mode the player usually isn't.
+                MAIN.post {
+                    if (com.project.lol.webview.PlayerHost.webView === wv) runCatching { wv.evaluateJavascript(js, null) }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Logger.w(TAG, "nFetchAsync not started: ${e.javaClass.simpleName}")
+            false
+        }
     }
 
     @Suppress("unused")

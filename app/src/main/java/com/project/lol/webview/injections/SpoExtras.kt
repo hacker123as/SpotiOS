@@ -271,7 +271,7 @@ function saveStats(){
 }
 function statTick(){
   var now=Date.now(),dt=Math.min(now-lastTick,65000);lastTick=now;
-  if(X.stats===false||!playing())return;
+  if(X.stats===false||!playing()||window.__spoPend)return;
   try{if(window.__spoAdPlaying&&window.__spoAdPlaying())return;}catch(e){}
   var t=txt(byId('spl-track')),a=txt(byId('spl-artist'));
   if(!t||t==='—')return;

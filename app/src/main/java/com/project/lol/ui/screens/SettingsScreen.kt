@@ -129,6 +129,7 @@ import compose.icons.tablericons.BrightnessUp
 import compose.icons.tablericons.Brush
 import compose.icons.tablericons.Bug
 import compose.icons.tablericons.Car
+import compose.icons.tablericons.Cast
 import compose.icons.tablericons.Check
 import compose.icons.tablericons.ChevronRight
 import compose.icons.tablericons.Click
@@ -275,6 +276,14 @@ fun SettingsContent(
     var showInstallLink by remember { mutableStateOf(false) }
     var installSource by remember { mutableStateOf<String?>(null) }
     var showDeviceName by remember { mutableStateOf(false) }
+    var serverOn by remember { mutableStateOf(com.project.lol.service.ServerMode.isOn(context)) }
+    var serverWithSpotify by remember { mutableStateOf(com.project.lol.service.ServerMode.startWithSpotify(context)) }
+    var notifAccess by remember { mutableStateOf(com.project.lol.service.ServerMode.hasNotificationAccess(context)) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        serverOn = com.project.lol.service.ServerMode.isOn(context)
+        notifAccess = com.project.lol.service.ServerMode.hasNotificationAccess(context)
+        onPauseOrDispose { }
+    }
     var deviceName by remember { mutableStateOf(prefs.getString("SpoDeviceName", null)?.takeIf { it.isNotBlank() } ?: "SpotiOS") }
     var showSaveAccountDialog by remember { mutableStateOf(false) }
     var pendingCookies by remember { mutableStateOf<String?>(null) }
@@ -667,6 +676,59 @@ fun SettingsContent(
             }
 
             if (settingsTab == SettingsTab.Playback) {
+                SettingSectionCard(
+                    title = stringResource(R.string.settings_section_server),
+                    icon = TablerIcons.Cast,
+                    info = stringResource(R.string.settings_server_info)
+                ) {
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_server_mode),
+                        subtitle = stringResource(if (serverOn) R.string.settings_server_mode_on else R.string.settings_server_mode_off),
+                        icon = TablerIcons.Cast,
+                        checked = serverOn,
+                        onCheckedChange = {
+                            serverOn = it
+                            com.project.lol.service.ServerMode.setOn(context, it)
+                            if (it && !batteryFree) {
+                                runCatching { context.startActivity(com.project.lol.ui.onboarding.batteryOptimizationIntent(context)) }
+                            }
+                        }
+                    )
+                    if (serverOn) {
+                        HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                        SettingSwitchTile(
+                            title = stringResource(R.string.settings_server_with_spotify),
+                            subtitle = stringResource(
+                                when {
+                                    !serverWithSpotify -> R.string.settings_server_with_spotify_off
+                                    notifAccess -> R.string.settings_server_with_spotify_on
+                                    else -> R.string.settings_server_with_spotify_needs_access
+                                }
+                            ),
+                            icon = TablerIcons.PlayerPlay,
+                            checked = serverWithSpotify,
+                            onCheckedChange = {
+                                serverWithSpotify = it
+                                com.project.lol.service.ServerMode.setStartWithSpotify(context, it)
+                                if (it && !notifAccess) {
+                                    runCatching { context.startActivity(com.project.lol.service.ServerMode.notificationAccessIntent(context)) }
+                                }
+                            }
+                        )
+                        if (!batteryFree) {
+                            HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                            SettingTile(
+                                title = stringResource(R.string.onb_battery_open),
+                                subtitle = stringResource(R.string.settings_server_battery_hint),
+                                icon = TablerIcons.Battery,
+                                onClick = {
+                                    runCatching { context.startActivity(com.project.lol.ui.onboarding.batteryOptimizationIntent(context)) }
+                                }
+                            )
+                        }
+                    }
+                }
+
                 SettingSectionCard(
                     title = stringResource(R.string.settings_section_player),
                     icon = TablerIcons.PlayerPlay
