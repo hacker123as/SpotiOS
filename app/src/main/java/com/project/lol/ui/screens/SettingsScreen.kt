@@ -445,6 +445,20 @@ fun SettingsContent(
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
 
+                    var spoTabBar by remember { mutableStateOf(prefs.getBoolean("SpoTabBar", true)) }
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_spo_tab_bar),
+                        subtitle = stringResource(R.string.settings_spo_tab_bar_subtitle),
+                        icon = TablerIcons.DeviceMobile,
+                        checked = spoTabBar,
+                        onCheckedChange = { enabled ->
+                            spoTabBar = enabled
+                            prefs.edit().putBoolean("SpoTabBar", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
                     SettingSwitchTile(
                         title = stringResource(R.string.settings_hide_top_bar),
                         subtitle = stringResource(R.string.settings_hide_top_bar_subtitle),

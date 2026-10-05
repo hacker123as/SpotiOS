@@ -55,6 +55,12 @@
     <string name="settings_apply">Apply</string>
     <string name="settings_amoled_theme">AMOLED Theme</string>
     <string name="settings_amoled_theme_subtitle">Pure black background to save battery</string>
+    <string name="settings_spo_tab_bar">iOS Tab Bar</string>
+    <string name="settings_spo_tab_bar_subtitle">Floating Home, Search, Library and Settings bar</string>
+    <string name="main_timer_end_of_song">End of song</string>
+    <string name="main_timer_custom">Custom (minutes)</string>
+    <string name="main_timer_presets_hint">Pause playback after…</string>
+    <string name="main_timer_end_of_song_active">Pausing when this song ends</string>
     <string name="settings_hide_top_bar">Hide Top Bar</string>
     <string name="settings_hide_top_bar_subtitle">Swipe down from the top to show it</string>
     <string name="settings_landscape_mode">Landscape Mode</string>

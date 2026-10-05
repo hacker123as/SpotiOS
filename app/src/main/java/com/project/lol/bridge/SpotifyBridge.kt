@@ -46,6 +46,8 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     var onEnterPipVideoRequest: ((Int, Int) -> Unit)? = null
     var onDownloadTrack: ((String) -> Unit)? = null
     var onDownloadCollection: ((String) -> Unit)? = null
+    var onOpenSettingsRequest: (() -> Unit)? = null
+    var onSleepTimerFinished: (() -> Unit)? = null
 
     @JavascriptInterface
     fun loginDetected() {
@@ -192,6 +194,49 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         activity.runOnUiThread {
             onTimerDialogRequest?.invoke()
         }
+    }
+
+    @JavascriptInterface
+    fun shareText(subject: String?, text: String?) {
+        val activity = activityRef.get() ?: return
+        val body = text?.trim().orEmpty()
+        if (body.isEmpty()) return
+        Logger.d(CALL, "shareText")
+        activity.runOnUiThread {
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_TEXT, body)
+                if (!subject.isNullOrBlank()) putExtra(android.content.Intent.EXTRA_SUBJECT, subject)
+            }
+            try {
+                activity.startActivity(android.content.Intent.createChooser(send, null))
+            } catch (e: Exception) {
+                Logger.e(TAG, "share failed", e)
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun openSettings() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread { onOpenSettingsRequest?.invoke() }
+    }
+
+    @JavascriptInterface
+    fun haptic() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            activity.window?.decorView?.performHapticFeedback(
+                android.view.HapticFeedbackConstants.CONTEXT_CLICK
+            )
+        }
+    }
+
+    @JavascriptInterface
+    fun sleepTimerFinished() {
+        val activity = activityRef.get() ?: return
+        Logger.i(CALL, "sleepTimerFinished (end of song)")
+        activity.runOnUiThread { onSleepTimerFinished?.invoke() }
     }
 
     @JavascriptInterface
