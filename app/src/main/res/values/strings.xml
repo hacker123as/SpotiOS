@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Spotilol</string>
+    <string name="app_name">SpotiOS</string>
     <string name="aa_playlists">Playlists</string>
     <string name="aa_albums">Albums</string>
     <string name="aa_artists">Artists</string>
@@ -70,7 +70,7 @@
     <string name="settings_autoplay_onetime">One time at start</string>
     <string name="settings_autoplay_permanent">Permanent</string>
     <string name="settings_player_mode">Player Mode</string>
-    <string name="settings_player_spotilol">Spotilol Player</string>
+    <string name="settings_player_spotilol">SpotiOS Player</string>
     <string name="settings_player_original">Spotify Original</string>
     <string name="settings_hide_empty_player">Hide Empty Mini Player</string>
     <string name="settings_hide_empty_player_subtitle">Hide the mini player until a track is loaded</string>
@@ -143,10 +143,10 @@
     <string name="settings_ca_certificate_subtitle">Re-export proxy certificate to Downloads</string>
     <string name="settings_cert_exported">Exported to %1$s</string>
     <string name="settings_github_repository">GitHub Repository</string>
-    <string name="settings_github_subtitle">github.com/lyssadev/Spotilol</string>
+    <string name="settings_github_subtitle">github.com/hacker123as/SpotiOS</string>
     <string name="settings_discord_server">Discord Server</string>
     <string name="settings_discord_subtitle">discord.gg/95dAE2UkqP</string>
-    <string name="settings_version">Spotilol Version</string>
+    <string name="settings_version">SpotiOS Version</string>
     <string name="settings_version_format">v%1$s · %2$s</string>
     <string name="settings_changelog_version">v%1$s</string>
     <string name="settings_webview_engine">WebView Engine</string>
@@ -158,7 +158,7 @@
     <string name="settings_open_logger_off">Logging is off, only old entries are shown</string>
     <string name="settings_crash_test">Crash test</string>
     <string name="settings_crash_test_subtitle">Throw a test exception and open the crash screen</string>
-    <string name="settings_crash_test_exception">Spotilol crash test</string>
+    <string name="settings_crash_test_exception">SpotiOS crash test</string>
     <string name="settings_debug_unlocked">Debug tools unlocked</string>
     <string name="settings_debug_tap_one_left">1 tap left to unlock Debug</string>
     <string name="settings_debug_taps_left">%1$d taps left to unlock Debug</string>
@@ -186,7 +186,7 @@
     <string name="logger_clear">Clear</string>
     <string name="logger_copy">Copy</string>
     <string name="logger_close">Close</string>
-    <string name="offline_app_name">Spotilol</string>
+    <string name="offline_app_name">SpotiOS</string>
     <string name="offline_version">v%1$s · %2$s</string>
     <string name="offline_desc_settings">Settings</string>
     <string name="offline_desc_exit_offline_mode">Exit offline mode</string>
@@ -261,10 +261,10 @@
     <string name="main_pip_pause">Pause</string>
     <string name="main_pip_next">Next</string>
     <string name="splash_exported_to">Exported to: %1$s</string>
-    <string name="splash_title">Spotilol</string>
+    <string name="splash_title">SpotiOS</string>
     <string name="splash_version_label">v%1$s · %2$s</string>
     <string name="splash_cert_title">Certificate Required</string>
-    <string name="splash_cert_subtitle">Install the Spotilol CA certificate to continue.</string>
+    <string name="splash_cert_subtitle">Install the SpotiOS CA certificate to continue.</string>
     <string name="splash_cert_step_1">Export the .pem certificate below</string>
     <string name="splash_cert_step_2">Settings > Security > Install a certificate > CA certificate</string>
     <string name="splash_cert_step_3">Select the exported file and tap \"Install anyway\"</string>
@@ -274,7 +274,7 @@
     <string name="splash_cert_switch_normal">Switch to Normal</string>
     <string name="splash_onboarding_step">Step %1$d of %2$d</string>
     <string name="splash_onboarding_welcome">Welcome</string>
-    <string name="splash_onboarding_permissions_subtitle">Spotilol needs these permissions to work properly.</string>
+    <string name="splash_onboarding_permissions_subtitle">SpotiOS needs these permissions to work properly.</string>
     <string name="splash_onboarding_notifications_title">Notifications</string>
     <string name="splash_onboarding_notifications_desc">Playback controls in the notification shade and lock screen.</string>
     <string name="splash_onboarding_bluetooth_title">Nearby devices</string>
@@ -288,7 +288,7 @@
     <string name="splash_onboarding_mode_cert_desc">Local proxy, needs the CA installed.</string>
     <string name="splash_onboarding_go">Go</string>
     <string name="settings_dialog_title">Settings</string>
-    <string name="settings_dialog_version">Spotilol v%1$s · %2$s</string>
+    <string name="settings_dialog_version">SpotiOS v%1$s · %2$s</string>
     <string name="settings_dialog_close">Close</string>
     <string name="error_title_no_internet">You\'re Offline</string>
     <string name="error_message_no_internet">No internet connection detected.\nCheck your network and try again.</string>
@@ -305,7 +305,7 @@
     <string name="error_retry">Retry</string>
     <string name="error_detail">Error %1$d - %2$s</string>
 
-    <string name="crash_title">Spotilol crashed</string>
+    <string name="crash_title">SpotiOS crashed</string>
     <string name="crash_unknown">Unknown crash</string>
     <string name="crash_no_report">no crash report captured</string>
     <string name="crash_report_header">Report</string>
@@ -315,9 +315,9 @@
     <string name="crash_restart">Restart</string>
 
     <string name="notif_channel_media_name">Media Playback</string>
-    <string name="notif_channel_media_description">Spotilol media playback controls</string>
+    <string name="notif_channel_media_description">SpotiOS media playback controls</string>
     <string name="notif_channel_offline_name">Offline Playback</string>
-    <string name="notif_channel_offline_description">Spotilol offline playback controls</string>
+    <string name="notif_channel_offline_description">SpotiOS offline playback controls</string>
     <string name="notif_action_previous">Previous</string>
     <string name="notif_action_next">Next</string>
     <string name="notif_action_play">Play</string>
@@ -331,13 +331,13 @@
     <string name="notif_unknown_name">Unknown</string>
     <string name="notif_by_artist">by %1$s</string>
     <string name="notif_channel_downloads_name">Downloads</string>
-    <string name="notif_channel_downloads_description">Spotilol track downloads</string>
+    <string name="notif_channel_downloads_description">SpotiOS track downloads</string>
     <string name="notif_repeat_disable">Disable repeat</string>
     <string name="notif_repeat_disable_one">Disable repeat one</string>
     <string name="notif_repeat_enable">Enable repeat</string>
 
     <string name="dl_notif_downloading_playlist">Downloading playlist</string>
-    <string name="dl_notif_downloading_title">Spotilol Download</string>
+    <string name="dl_notif_downloading_title">SpotiOS Download</string>
     <string name="dl_notif_track_of">Track %1$d of %2$d</string>
     <string name="dl_notif_stage_percent">%1$s · %2$d%%</string>
     <string name="dl_notif_saved">%1$d saved</string>
@@ -353,13 +353,13 @@
 
     <string name="service_disabled_message">Service is not enabled</string>
 
-    <string name="widget_player_name">Spotilol player</string>
-    <string name="widget_player_description">Playback controls for Spotilol</string>
-    <string name="widget_art_name">Spotilol art</string>
+    <string name="widget_player_name">SpotiOS player</string>
+    <string name="widget_player_description">Playback controls for SpotiOS</string>
+    <string name="widget_art_name">SpotiOS art</string>
     <string name="widget_art_description">Album art of the current track</string>
-    <string name="widget_action_open_app">Open Spotilol</string>
+    <string name="widget_action_open_app">Open SpotiOS</string>
     <string name="widget_action_shuffle">Shuffle</string>
     <string name="widget_action_repeat">Repeat</string>
-    <string name="widget_empty_title">Spotilol</string>
+    <string name="widget_empty_title">SpotiOS</string>
     <string name="widget_empty_subtitle">Open the app to start playing</string>
 </resources>
