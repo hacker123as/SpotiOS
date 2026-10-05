@@ -417,6 +417,7 @@ object DownloadManager {
         var saved = 0
         var failed = 0
         var skipped = 0
+        var alreadyHad = 0
         var cancelled = false
         batchActive = true
         markStatus(
@@ -483,7 +484,8 @@ object DownloadManager {
 
                 if (track.trackId in alreadySaved || OfflineStore.isTrackSaved(appContext, track.trackId)) {
                     skipped++
-                    report(100, "Already saved")
+                    alreadyHad++
+                    report(100, "Already downloaded")
                     continue
                 }
 
@@ -554,7 +556,8 @@ object DownloadManager {
         val summary = buildString {
             append(saved)
             append(if (saved == 1) " track saved" else " tracks saved")
-            if (skipped > 0) append(", $skipped skipped")
+            if (alreadyHad > 0) append(", $alreadyHad already downloaded")
+            if (skipped - alreadyHad > 0) append(", ${skipped - alreadyHad} skipped")
             if (failed > 0) append(", $failed failed")
             if (cancelled) append(" — cancelled at $processed/$total")
         }

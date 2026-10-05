@@ -155,6 +155,7 @@ import compose.icons.tablericons.Power
 import compose.icons.tablericons.RotateClockwise2
 import compose.icons.tablericons.Shield
 import compose.icons.tablericons.Trash
+import compose.icons.tablericons.Battery
 import compose.icons.tablericons.TrashOff
 import compose.icons.tablericons.User
 import compose.icons.tablericons.UserPlus
@@ -256,6 +257,11 @@ fun SettingsContent(
 
     var showConnectionModeDialog by remember { mutableStateOf(false) }
     var showDownloadsManager by remember { mutableStateOf(false) }
+    var batteryFree by remember { mutableStateOf(com.project.lol.ui.onboarding.isIgnoringBatteryOptimizations(context)) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        batteryFree = com.project.lol.ui.onboarding.isIgnoringBatteryOptimizations(context)
+        onPauseOrDispose { }
+    }
     var showDevScriptsSettings by remember { mutableStateOf(false) }
     var showSaveAccountDialog by remember { mutableStateOf(false) }
     var pendingCookies by remember { mutableStateOf<String?>(null) }
@@ -793,6 +799,18 @@ fun SettingsContent(
                         subtitle = "See downloaded playlists and songs, remove what you don't need",
                         icon = TablerIcons.Trash,
                         onClick = { showDownloadsManager = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    SettingTile(
+                        title = "Background downloads",
+                        subtitle = if (batteryFree) "Battery optimization is off, downloads keep going with the screen off"
+                        else "Turn off battery optimization so downloads and music keep going",
+                        icon = TablerIcons.Battery,
+                        onClick = {
+                            runCatching { context.startActivity(com.project.lol.ui.onboarding.batteryOptimizationIntent(context)) }
+                        }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))

@@ -75,6 +75,9 @@ import com.project.lol.BuildConfig
 import com.project.lol.R
 import com.project.lol.offline.OfflineStore
 import com.project.lol.proxy.LocalProxyManager
+import com.project.lol.ui.onboarding.OnboardingFlow
+import com.project.lol.ui.onboarding.STEP_BATTERY
+import com.project.lol.ui.onboarding.isIgnoringBatteryOptimizations
 import com.project.lol.ui.theme.SpotifyTheme
 import com.project.lol.util.BuildInfo
 import com.project.lol.util.NetworkState
@@ -115,6 +118,7 @@ class SplashActivity : ComponentActivity() {
             var intro by remember { mutableStateOf(true) }
             var onboarding by remember { mutableStateOf(false) }
             var onboardingStep by remember { mutableIntStateOf(0) }
+            var onlyBattery by remember { mutableStateOf(false) }
             var selectedMode by remember { mutableStateOf("normal") }
             var certInstalled by remember { mutableStateOf(false) }
             var checkDone by remember { mutableStateOf(false) }
@@ -128,7 +132,7 @@ class SplashActivity : ComponentActivity() {
 
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
-            ) { onboardingStep = 1 }
+            ) { onboardingStep = STEP_BATTERY }
 
             LaunchedEffect(onboarding) {
                 if (onboarding) {
@@ -161,8 +165,17 @@ class SplashActivity : ComponentActivity() {
                 }
                 intro = false
                 if (prefs.getBoolean("OnboardingDone", false)) {
-                    checking = true
-                    checkTrigger++
+                    // People who set up an older version get asked about battery once.
+                    if (!prefs.getBoolean("BatteryAsked", false) &&
+                        !isIgnoringBatteryOptimizations(this@SplashActivity)
+                    ) {
+                        onlyBattery = true
+                        onboardingStep = STEP_BATTERY
+                        onboarding = true
+                    } else {
+                        checking = true
+                        checkTrigger++
+                    }
                 } else {
                     onboarding = true
                 }
@@ -214,27 +227,28 @@ class SplashActivity : ComponentActivity() {
                 Box(modifier = Modifier.graphicsLayer { alpha = contentAlpha }) {
                     when {
                         intro || checking -> LoadingScreen()
-                        onboarding -> OnboardingScreen(
+                        onboarding -> OnboardingFlow(
                             modifier = Modifier.graphicsLayer {
                                 alpha = onboardingAppear.value
                                 translationY = (1f - onboardingAppear.value) * 28.dp.toPx()
                             },
                             step = onboardingStep,
-                            mode = selectedMode,
-                            onAccept = {
+                            onlyBattery = onlyBattery,
+                            onNext = { onboardingStep = (onboardingStep + 1).coerceAtMost(STEP_BATTERY) },
+                            onRequestPermissions = {
                                 val required = requiredPermissions()
                                 if (required.isEmpty()) {
-                                    onboardingStep = 1
+                                    onboardingStep = STEP_BATTERY
                                 } else {
                                     permissionLauncher.launch(required.toTypedArray())
                                 }
                             },
-                            onMode = { selectedMode = it },
-                            onGo = {
+                            onFinish = {
                                 if (!onboardingLeaving) {
                                     onboardingLeaving = true
                                     prefs.edit()
                                         .putBoolean("OnboardingDone", true)
+                                        .putBoolean("BatteryAsked", true)
                                         .putString("ConnectionMode", selectedMode)
                                         .apply()
                                     scope.launch {
@@ -493,239 +507,3 @@ private fun Step(number: Int, text: String) {
         )
     }
 }
-
-@Composable
-private fun OnboardingScreen(
-    modifier: Modifier = Modifier,
-    step: Int,
-    mode: String,
-    onAccept: () -> Unit,
-    onMode: (String) -> Unit,
-    onGo: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 28.dp)
-            .systemBarsPadding(),
-        contentAlignment = Alignment.Center
-    ) {
-        AnimatedContent(
-            targetState = step,
-            transitionSpec = {
-                (
-                    fadeIn(tween(280, easing = LinearOutSlowInEasing)) +
-                        slideInVertically(tween(280, easing = LinearOutSlowInEasing)) { it / 12 }
-                    ) togetherWith (
-                    fadeOut(tween(160, easing = LinearEasing)) +
-                        slideOutVertically(tween(160, easing = LinearEasing)) { -it / 12 }
-                    )
-            },
-            label = "onboardingStep"
-        ) { current ->
-            OnboardingPhase(
-                step = current,
-                mode = mode,
-                onAccept = onAccept,
-                onMode = onMode,
-                onGo = onGo
-            )
-        }
-    }
-}
-
-@Composable
-private fun OnboardingPhase(
-    step: Int,
-    mode: String,
-    onAccept: () -> Unit,
-    onMode: (String) -> Unit,
-    onGo: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = stringResource(R.string.splash_onboarding_step, step + 1, 2),
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.35f)
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        Text(
-            text = stringResource(
-                if (step == 0) R.string.splash_onboarding_welcome else R.string.splash_onboarding_mode_title
-            ),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            text = stringResource(
-                if (step == 0) R.string.splash_onboarding_permissions_subtitle
-                else R.string.splash_onboarding_mode_subtitle
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.45f),
-            lineHeight = 18.sp
-        )
-
-        Spacer(Modifier.height(22.dp))
-
-        if (step == 0) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                OnboardingItem(
-                    icon = TablerIcons.Bell,
-                    title = stringResource(R.string.splash_onboarding_notifications_title),
-                    description = stringResource(R.string.splash_onboarding_notifications_desc)
-                )
-                Spacer(Modifier.height(10.dp))
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                OnboardingItem(
-                    icon = TablerIcons.Bluetooth,
-                    title = stringResource(R.string.splash_onboarding_bluetooth_title),
-                    description = stringResource(R.string.splash_onboarding_bluetooth_desc)
-                )
-            }
-            Spacer(Modifier.height(26.dp))
-            OnboardingAction(
-                label = stringResource(R.string.splash_onboarding_accept),
-                onClick = onAccept
-            )
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OnboardingMode(
-                    modifier = Modifier.weight(1f),
-                    icon = TablerIcons.Language,
-                    title = stringResource(R.string.splash_onboarding_mode_normal_title),
-                    description = stringResource(R.string.splash_onboarding_mode_normal_desc),
-                    selected = mode == "normal",
-                    onClick = { onMode("normal") }
-                )
-            }
-            Spacer(Modifier.height(26.dp))
-            OnboardingAction(
-                label = stringResource(R.string.splash_onboarding_go),
-                onClick = onGo
-            )
-        }
-    }
-}
-
-
-@Composable
-private fun OnboardingItem(icon: ImageVector, title: String, description: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(11.dp))
-                .background(Color.White.copy(alpha = 0.10f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.45f),
-                lineHeight = 15.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun OnboardingMode(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    title: String,
-    description: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-        else Color.White.copy(alpha = 0.06f),
-        border = BorderStroke(
-            1.5.dp,
-            if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.10f)
-        )
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.45f),
-                lineHeight = 15.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun OnboardingAction(label: String, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primary
-    ) {
-        Box(modifier = Modifier.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimary
-            )
-        }
-    }
-}
-
