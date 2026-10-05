@@ -74,6 +74,11 @@ You can always change it later in **Settings → Downloads → Background downlo
 - Media notification, lock screen controls, Bluetooth and headset buttons, and car controls.
 - Music pauses when Bluetooth disconnects (on by default, can be turned off).
 - Long-press songs, cards and library rows for quick actions such as add to queue, go to artist and share.
+- The **⋯** button in Now Playing opens a menu: go to artist, go to album, open queue, share, your stats and **playback speed** (0.5× to 2×).
+- **Gestures:** swipe the mini player or the artwork sideways to skip, double-tap the artwork to like, and optionally shake your phone to skip.
+- **Listening stats:** minutes today, this week and all time, a 7-day chart, and your top songs and artists.
+  Stats are kept on your phone only. Open them from Now Playing → ⋯ or the account menu.
+- **Hide podcasts and audiobooks** to keep Home and Library about music.
 
 **Ad blocking**
 - Built in. No certificate, VPN or proxy is needed.
@@ -118,6 +123,11 @@ Open the **Settings** tab in the tab bar.
 | Album Art Wallpaper | Tints the app with the current song's artwork. |
 | Haptic Feedback | Small vibrations when you tap tabs and player buttons. |
 | Lyrics for Every Song | Uses LRCLIB when Spotify has no lyrics. |
+| Swipe to Skip | Swipe the mini player or artwork sideways to change songs. |
+| Double-Tap to Like | Double-tap the artwork in Now Playing to save the song. |
+| Shake to Skip | Shake the phone to skip while the screen is on (off by default). |
+| Hide Podcasts & Audiobooks | Hides podcast and audiobook shelves and chips. |
+| Listening Stats | Counts your plays on this phone. |
 | Hide Empty Mini Player | Hides the mini player until a song plays. |
 | Pause on Disconnect | Pauses when Bluetooth headphones or the car disconnect. |
 | Play Here on Launch | Moves playback to this phone when SpotiOS opens. |
@@ -126,7 +136,7 @@ Open the **Settings** tab in the tab bar.
 | Open offline library | Shows what plays without internet. |
 | User scripts (Dev) | Add your own scripts, see below. |
 
-Spotify's own crossfade and audio quality settings aren't available, because Spotify's web player doesn't offer them.
+Some things can't be done because Spotify's web player doesn't allow them: crossfade, audio quality, an equalizer and volume boost. Spotify's audio is copy-protected, so the app can't process the sound itself.
 
 ## Dev menu: user scripts
 

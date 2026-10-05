@@ -390,6 +390,8 @@ class SpotifyWebViewClient(
                 append(SpotilolPlayer.CONTENT)
             }
             append(SpotiOSUi.content(prefs.getBoolean("SpoTabBar", true), prefs.getBoolean("SpoArtWall", true), prefs.getBoolean("SpoLrc", true)))
+            append(";\n")
+            append(spoExtrasJs(prefs, full = true))
         }
         val cleanJs = JsUtils.stripConsoleLogs(js) + "\n" +
                 buildAmoledJs(amoledEnabled) + "\n" +
@@ -448,6 +450,8 @@ class SpotifyWebViewClient(
                     wv.evaluateJavascript(LiquidGlassTheme.buildJs(wv.context), null)
                 "PaletteSeed", "MaterialYou" ->
                     wv.evaluateJavascript(AccentTheme.buildAccentJs(wv.context), null)
+                "SpoHidePods", "SpoSwipeSkip", "SpoDoubleTapLike", "SpoStats", "SpoShake" ->
+                    wv.evaluateJavascript(spoExtrasJs(prefs, full = false), null)
                 "SpoLrc" -> {
                     val on = prefs.getBoolean("SpoLrc", true)
                     wv.evaluateJavascript("window.__spoLrc=$on;", null)
@@ -535,4 +539,15 @@ class SpotifyWebViewClient(
             } catch(e){}
         """.trimIndent()
     }
+
+    private fun spoExtrasJs(prefs: android.content.SharedPreferences, full: Boolean): String {
+        val hidePods = prefs.getBoolean("SpoHidePods", false)
+        val swipe = prefs.getBoolean("SpoSwipeSkip", true)
+        val dtLike = prefs.getBoolean("SpoDoubleTapLike", true)
+        val stats = prefs.getBoolean("SpoStats", true)
+        val shake = prefs.getBoolean("SpoShake", false)
+        return if (full) SpoExtras.content(hidePods, swipe, dtLike, stats, shake)
+        else SpoExtras.prefsJs(hidePods, swipe, dtLike, stats, shake)
+    }
+
 }

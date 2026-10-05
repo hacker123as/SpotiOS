@@ -155,6 +155,11 @@ import compose.icons.tablericons.Power
 import compose.icons.tablericons.RotateClockwise2
 import compose.icons.tablericons.Shield
 import compose.icons.tablericons.Trash
+import compose.icons.tablericons.ChartBar
+import compose.icons.tablericons.Microphone
+import compose.icons.tablericons.DeviceMobileVibration
+import compose.icons.tablericons.Heart
+import compose.icons.tablericons.ArrowsHorizontal
 import compose.icons.tablericons.Battery
 import compose.icons.tablericons.TrashOff
 import compose.icons.tablericons.User
@@ -494,6 +499,76 @@ fun SettingsContent(
                         onCheckedChange = { enabled ->
                             spoLrc = enabled
                             prefs.edit().putBoolean("SpoLrc", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var xSpoSwipeSkip by remember { mutableStateOf(prefs.getBoolean("SpoSwipeSkip", true)) }
+                    SettingSwitchTile(
+                        title = "Swipe to Skip",
+                        subtitle = "Swipe the mini player or the artwork left or right to change songs",
+                        icon = TablerIcons.ArrowsHorizontal,
+                        checked = xSpoSwipeSkip,
+                        onCheckedChange = { enabled ->
+                            xSpoSwipeSkip = enabled
+                            prefs.edit().putBoolean("SpoSwipeSkip", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var xSpoDoubleTapLike by remember { mutableStateOf(prefs.getBoolean("SpoDoubleTapLike", true)) }
+                    SettingSwitchTile(
+                        title = "Double-Tap to Like",
+                        subtitle = "Double-tap the artwork in Now Playing to save the song",
+                        icon = TablerIcons.Heart,
+                        checked = xSpoDoubleTapLike,
+                        onCheckedChange = { enabled ->
+                            xSpoDoubleTapLike = enabled
+                            prefs.edit().putBoolean("SpoDoubleTapLike", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var xSpoShake by remember { mutableStateOf(prefs.getBoolean("SpoShake", false)) }
+                    SettingSwitchTile(
+                        title = "Shake to Skip",
+                        subtitle = "Shake your phone to skip to the next song while the screen is on",
+                        icon = TablerIcons.DeviceMobileVibration,
+                        checked = xSpoShake,
+                        onCheckedChange = { enabled ->
+                            xSpoShake = enabled
+                            prefs.edit().putBoolean("SpoShake", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var xSpoHidePods by remember { mutableStateOf(prefs.getBoolean("SpoHidePods", false)) }
+                    SettingSwitchTile(
+                        title = "Hide Podcasts & Audiobooks",
+                        subtitle = "Keep Home and Library about music only",
+                        icon = TablerIcons.Microphone,
+                        checked = xSpoHidePods,
+                        onCheckedChange = { enabled ->
+                            xSpoHidePods = enabled
+                            prefs.edit().putBoolean("SpoHidePods", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var xSpoStats by remember { mutableStateOf(prefs.getBoolean("SpoStats", true)) }
+                    SettingSwitchTile(
+                        title = "Listening Stats",
+                        subtitle = "Count your plays on this phone. See them in Now Playing → ⋯ or the account menu",
+                        icon = TablerIcons.ChartBar,
+                        checked = xSpoStats,
+                        onCheckedChange = { enabled ->
+                            xSpoStats = enabled
+                            prefs.edit().putBoolean("SpoStats", enabled).apply()
                         }
                     )
 

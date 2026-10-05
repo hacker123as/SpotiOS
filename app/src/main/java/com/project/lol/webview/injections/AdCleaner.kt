@@ -58,6 +58,8 @@ object AdCleaner {
                 if (!bar) return false;
                 return !!bar.querySelector('[data-testid="context-item-info-ad-subtitle"],a[href*="/ad/"],a[href*="adclick"],[data-testid="ad-link"]');
             }
+            window.__spoAllMedia = allMedia;
+            window.__spoAdPlaying = adPlaying;
             var muted = [];
             function tick(){
                 if (adPlaying()) {
