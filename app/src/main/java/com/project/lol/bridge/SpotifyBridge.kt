@@ -7,6 +7,7 @@ import android.webkit.JavascriptInterface
 import android.widget.Toast
 import com.project.lol.R
 import com.project.lol.service.MediaNotificationService
+import com.project.lol.service.ServerMode
 import com.project.lol.webview.helpers.AdIdStore
 import org.json.JSONArray
 import org.json.JSONObject
@@ -36,7 +37,15 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         private const val CALL = "bridge.call"
     }
 
-    private val activityRef = activityRef
+    @Volatile private var activityRef = activityRef
+
+    /** Points the bridge at the screen now showing the player, or null while it runs without one. */
+    fun attach(activity: Activity?) {
+        activityRef = WeakReference(activity)
+    }
+
+    private fun appContext(): android.content.Context? =
+        activityRef.get()?.applicationContext ?: com.project.lol.SpotilolApp.context
 
     /** Runs JS in the Spotify WebView; set by MainActivity. */
     var onJs: ((String) -> Unit)? = null
@@ -55,14 +64,70 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
 
     @JavascriptInterface
     fun loginDetected() {
-        val activity = activityRef.get() ?: return
+        val ctx = appContext() ?: return
         Logger.i(TAG, "login detected")
-        activity.getSharedPreferences("spotilol_prefs", Activity.MODE_PRIVATE)
+        ctx.getSharedPreferences("spotilol_prefs", Activity.MODE_PRIVATE)
             .edit()
             .putBoolean("LoggedIn", true)
             .apply()
-        activity.runOnUiThread {
+        activityRef.get()?.runOnUiThread {
             onLoginDetected?.invoke()
+        }
+    }
+
+    /** Server Mode settings and phone facts for the Server screen (see ServerMode.statusJson). */
+    @JavascriptInterface
+    fun serverStatus(): String {
+        val ctx = appContext() ?: return "{}"
+        return ServerMode.statusJson(ctx)
+    }
+
+    @JavascriptInterface
+    fun setServerMode(on: Boolean) {
+        val ctx = appContext() ?: return
+        ServerMode.setOn(ctx, on)
+    }
+
+    @JavascriptInterface
+    fun setStartWithSpotify(on: Boolean) {
+        val ctx = appContext() ?: return
+        ServerMode.setStartWithSpotify(ctx, on)
+        // Ask for notification access the first time it's needed.
+        if (on && !ServerMode.hasNotificationAccess(ctx)) openNotificationAccess()
+    }
+
+    @JavascriptInterface
+    fun openNotificationAccess() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            runCatching { activity.startActivity(ServerMode.notificationAccessIntent(activity)) }
+                .onFailure { runCatching { activity.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)) } }
+        }
+    }
+
+    @JavascriptInterface
+    fun openBatterySettings() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            runCatching { activity.startActivity(com.project.lol.ui.onboarding.batteryOptimizationIntent(activity)) }
+                .onFailure { runCatching { activity.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)) } }
+        }
+    }
+
+    /** Opens the Spotify app (Server screen > Open Spotify), or its store page. */
+    @JavascriptInterface
+    fun openSpotifyApp() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            val launch = activity.packageManager.getLaunchIntentForPackage(ServerMode.SPOTIFY_PACKAGE)
+            if (launch != null) {
+                runCatching { activity.startActivity(launch) }
+            } else {
+                runCatching {
+                    activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://play.google.com/store/apps/details?id=" + ServerMode.SPOTIFY_PACKAGE)))
+                }
+            }
         }
     }
 

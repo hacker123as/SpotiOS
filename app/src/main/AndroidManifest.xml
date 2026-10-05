@@ -141,6 +141,20 @@
             </intent-filter>
         </service>
 
+        <!-- Server Mode > Start with Spotify: notices the Spotify app's notification. -->
+        <service
+            android:name=".service.SpotifyWatcher"
+            android:exported="true"
+            android:label="@string/server_watcher_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="ongoing|alerting|silent" />
+        </service>
+
         <service
             android:name=".service.OfflineMediaService"
             android:exported="false"
