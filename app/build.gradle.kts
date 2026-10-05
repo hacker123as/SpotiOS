@@ -3,8 +3,6 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
@@ -21,11 +19,11 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.project.lol"
+        applicationId = "com.spotios.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.1.8"
+        versionCode = 200
+        versionName = "2.0.0"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
@@ -36,12 +34,25 @@ android {
         buildConfig = true
     }
 
+    val envStore = System.getenv("SPOTIOS_KEYSTORE")
+    val hasPropsKey = keystorePropertiesFile.exists()
+    val hasEnvKey = !envStore.isNullOrBlank() && file(envStore).exists()
+
     signingConfigs {
-        create("release") {
-            storeFile = rootProject.file("keystore/${keystoreProperties.getProperty("storeFile")}")
-            storePassword = keystoreProperties.getProperty("storePassword")
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
+        if (hasPropsKey || hasEnvKey) {
+            create("release") {
+                if (hasEnvKey) {
+                    storeFile = file(envStore!!)
+                    storePassword = System.getenv("SPOTIOS_STORE_PASSWORD")
+                    keyAlias = System.getenv("SPOTIOS_KEY_ALIAS")
+                    keyPassword = System.getenv("SPOTIOS_KEY_PASSWORD")
+                } else {
+                    storeFile = rootProject.file("keystore/${keystoreProperties.getProperty("storeFile")}")
+                    storePassword = keystoreProperties.getProperty("storePassword")
+                    keyAlias = keystoreProperties.getProperty("keyAlias")
+                    keyPassword = keystoreProperties.getProperty("keyPassword")
+                }
+            }
         }
     }
 
@@ -49,7 +60,7 @@ android {
         debug {
         }
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -75,17 +86,6 @@ dependencies {
     implementation(libs.bouncypkix)
     implementation(libs.security.crypto)
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:34.16.0"))
-    implementation("com.google.firebase:firebase-analytics") {
-        exclude(group = "com.google.firebase", module = "protolite-well-known-types")
-    }
-    implementation("com.google.firebase:firebase-crashlytics") {
-        exclude(group = "com.google.firebase", module = "protolite-well-known-types")
-    }
-    implementation("com.google.firebase:firebase-perf") {
-        exclude(group = "com.google.firebase", module = "protolite-well-known-types")
-    }
 
     // Jetpack Compose
     implementation(platform(libs.compose.bom))
