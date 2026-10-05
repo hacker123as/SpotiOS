@@ -26,9 +26,10 @@ object LiquidGlassTheme {
     // The asset never changes at runtime; quote it for JS once.
     @Volatile private var quotedCss: String? = null
 
-    fun isEnabled(context: Context): Boolean =
-        context.getSharedPreferences("spotilol_prefs", 0)
-            .getBoolean(PREF_KEY, DEFAULT_ENABLED)
+    // Retired in 2.4.0: layered over the SpotiOS shell it glitched, so it stays
+    // off and buildJs() only removes a style left over from older versions.
+    @Suppress("UNUSED_PARAMETER")
+    fun isEnabled(context: Context): Boolean = false
 
     private fun quotedCss(context: Context): String? {
         quotedCss?.let { return it }

@@ -101,7 +101,7 @@ class OfflineMediaService : Service() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
                 val prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
-                if (prefs.getBoolean("BtAutoPause", false)) {
+                if (prefs.getBoolean("BtAutoPause", true)) {
                     if (isPlaying) controller?.onPlayPause()
                 }
             }

@@ -27,6 +27,8 @@ data class OfflineSong(
     val ytAlbum: String = "",
     val ytThumbnail: String? = null,
     val shareLink: String? = null,
+    /** Playlist or album it was downloaded with, "" for single tracks. */
+    val collection: String = "",
 )
 
 object OfflineStore {
@@ -62,6 +64,7 @@ object OfflineStore {
         durationSec: Int? = null,
         explicit: Boolean = false,
         shareLink: String? = null,
+        collection: String? = null,
     ) {
         runCatching {
             val file = metaFile(context)
@@ -85,6 +88,7 @@ object OfflineStore {
                     if (durationSec != null) put("durationSec", durationSec)
                     if (explicit) put("explicit", true)
                     if (shareLink != null) put("shareLink", shareLink)
+                    if (!collection.isNullOrBlank()) put("collection", collection)
                 }
             )
             file.writeText(root.toString())
@@ -246,6 +250,7 @@ object OfflineStore {
             ytAlbum = extras?.optString("ytAlbum", "") ?: "",
             ytThumbnail = extras?.optString("ytThumb", null)?.ifBlank { null },
             shareLink = extras?.optString("shareLink", null)?.ifBlank { null },
+            collection = extras?.optString("collection", "") ?: "",
         )
     }
 

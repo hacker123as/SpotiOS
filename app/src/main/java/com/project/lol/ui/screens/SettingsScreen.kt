@@ -125,7 +125,6 @@ import compose.icons.tablericons.AlertTriangle
 import compose.icons.tablericons.ArrowsMinimize
 import compose.icons.tablericons.ArrowsSort
 import compose.icons.tablericons.ArrowsUpDown
-import compose.icons.tablericons.BrandDiscord
 import compose.icons.tablericons.BrightnessUp
 import compose.icons.tablericons.Brush
 import compose.icons.tablericons.Bug
@@ -239,16 +238,15 @@ fun SettingsContent(
     var guiMode by remember { mutableStateOf(prefs.getString("GuiMode", "csshack") ?: "csshack") }
     var customCss by remember { mutableStateOf(prefs.getString("CustomCss", "") ?: "") }
     var amoledTheme by remember { mutableStateOf(amoledThemeState) }
-    var liquidGlassTheme by remember { mutableStateOf(prefs.getBoolean(LiquidGlassTheme.PREF_KEY, LiquidGlassTheme.DEFAULT_ENABLED)) }
     var swipeStop by remember { mutableStateOf(prefs.getBoolean("SwipeStop", true)) }
-    var btAutoPause by remember { mutableStateOf(prefs.getBoolean("BtAutoPause", false)) }
+    var btAutoPause by remember { mutableStateOf(prefs.getBoolean("BtAutoPause", true)) }
     var btAutoResume by remember { mutableStateOf(prefs.getBoolean("BtAutoResume", false)) }
     var hpAutoResume by remember { mutableStateOf(prefs.getBoolean("HpAutoResume", false)) }
     var playerMode by remember { mutableStateOf(prefs.getString("PlayerMode", "spotilol") ?: "spotilol") }
     var connectionMode by remember { mutableStateOf(prefs.getString("ConnectionMode", "normal") ?: "normal") }
     var offlineMode by remember { mutableStateOf(prefs.getBoolean("OfflineMode", false)) }
     var blockSW by remember { mutableStateOf(blockServiceWorker) }
-    var hideEmptyPlayer by remember { mutableStateOf(prefs.getBoolean("HideEmptyPlayer", false)) }
+    var hideEmptyPlayer by remember { mutableStateOf(prefs.getBoolean("HideEmptyPlayer", true)) }
     var playlistSortEnabled by remember { mutableStateOf(prefs.getBoolean("PlaylistSortEnabled", true)) }
     var showScrollbar by remember { mutableStateOf(prefs.getBoolean("ShowScrollbar", true)) }
     var lyricsStyle by remember { mutableStateOf(prefs.getString("LyricsStyle", LyricsTheme.DEFAULT_STYLE) ?: LyricsTheme.DEFAULT_STYLE) }
@@ -257,6 +255,7 @@ fun SettingsContent(
     var profiles by remember { mutableStateOf(ProfileManager.getProfiles(context)) }
 
     var showConnectionModeDialog by remember { mutableStateOf(false) }
+    var showDownloadsManager by remember { mutableStateOf(false) }
     var showSaveAccountDialog by remember { mutableStateOf(false) }
     var pendingCookies by remember { mutableStateOf<String?>(null) }
     var accountNameInput by remember { mutableStateOf("") }
@@ -433,19 +432,6 @@ fun SettingsContent(
                         subtitle = accentLabel,
                         icon = TablerIcons.ColorSwatch,
                         onClick = { showPaletteDialog = true }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-
-                    SettingSwitchTile(
-                        title = stringResource(R.string.settings_liquid_glass_theme),
-                        subtitle = stringResource(R.string.settings_liquid_glass_theme_subtitle),
-                        icon = TablerIcons.Droplet,
-                        checked = liquidGlassTheme,
-                        onCheckedChange = { enabled ->
-                            liquidGlassTheme = enabled
-                            prefs.edit().putBoolean(LiquidGlassTheme.PREF_KEY, enabled).apply()
-                        }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
@@ -801,6 +787,26 @@ fun SettingsContent(
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
 
+                    SettingTile(
+                        title = "Manage downloads",
+                        subtitle = "See downloaded playlists and songs, remove what you don't need",
+                        icon = TablerIcons.Trash,
+                        onClick = { showDownloadsManager = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    SettingTile(
+                        title = "Open offline library",
+                        subtitle = "Test what plays without internet",
+                        icon = TablerIcons.CloudOff,
+                        onClick = {
+                            context.startActivity(Intent(context, com.project.lol.ui.OfflineActivity::class.java))
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
                     SettingSwitchTile(
                         title = stringResource(R.string.settings_write_tags),
                         subtitle = stringResource(R.string.settings_write_tags_subtitle),
@@ -967,18 +973,6 @@ fun SettingsContent(
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
 
                     SettingTile(
-                        title = stringResource(R.string.settings_discord_server),
-                        subtitle = stringResource(R.string.settings_discord_subtitle),
-                        icon = TablerIcons.BrandDiscord,
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.gg/95dAE2UkqP"))
-                            context.startActivity(intent)
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-
-                    SettingTile(
                         title = stringResource(R.string.settings_version),
                         subtitle = stringResource(R.string.settings_version_format, appVersionName, BuildInfo.id),
                         icon = TablerIcons.DeviceMobile,
@@ -1112,6 +1106,10 @@ fun SettingsContent(
                 }
             }
         )
+    }
+
+    if (showDownloadsManager) {
+        com.project.lol.ui.components.DownloadsManagerDialog(onDismiss = { showDownloadsManager = false })
     }
 
     if (showConnectionModeDialog) {

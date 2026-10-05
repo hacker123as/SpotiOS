@@ -434,6 +434,11 @@ object DownloadManager {
             error = false,
         )
         Logger.i(TAG, "runCollection: start '${job.name}' total=$total")
+        // One folder scan for the whole batch instead of one per track; with a few
+        // hundred songs the per-track scan made every step crawl.
+        val alreadySaved: Set<String> = runCatching {
+            OfflineStore.loadSongs(appContext).map { it.id }.toHashSet()
+        }.getOrDefault(emptySet())
 
         try {
             for ((index, track) in job.tracks.withIndex()) {
@@ -476,7 +481,7 @@ object DownloadManager {
                     null -> {}
                 }
 
-                if (OfflineStore.isTrackSaved(appContext, track.trackId)) {
+                if (track.trackId in alreadySaved || OfflineStore.isTrackSaved(appContext, track.trackId)) {
                     skipped++
                     report(100, "Already saved")
                     continue
@@ -513,6 +518,7 @@ object DownloadManager {
                                 durationSec = result.yt?.durationSec,
                                 explicit = result.yt?.explicit ?: false,
                                 shareLink = result.yt?.shareLink,
+                                collection = job.name,
                             )
                             report(100, "Saved")
                         }

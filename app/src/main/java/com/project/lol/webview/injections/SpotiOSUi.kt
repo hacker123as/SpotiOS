@@ -74,6 +74,18 @@ html.spo-artwall body::after{
 }
 html.spo-lite.spo-artwall body::after,html.spo-artwall:has(#spotilol-amoled-theme) body::after{display:none!important}
 html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transparent!important}
+/* no 300ms double-tap-zoom wait: taps on songs and buttons fire right away */
+html.spo,html.spo body,html.spo #main,html.spo [data-testid=tracklist-row],html.spo button,html.spo a,html.spo [role=button]{touch-action:manipulation}
+/* download progress: a glass pill that sits above the mini player, not on it */
+html.spo #spl-dl-progress[style*="position:fixed"],html.spo #spl-dl-progress[style*="position: fixed"]{
+  bottom:calc(var(--spo-mini-bottom) + 80px)!important;width:min(560px,calc(100vw - 28px))!important;
+  background:rgba(30,30,36,.78)!important;border:0!important;border-radius:16px!important;
+  backdrop-filter:blur(24px) saturate(180%)!important;-webkit-backdrop-filter:blur(24px) saturate(180%)!important;
+  box-shadow:var(--spo-rim),0 10px 30px rgba(0,0,0,.45)!important;padding:9px 14px!important;
+}
+html.spo-np-open #spl-dl-progress{opacity:0!important}
+/* the "# Title (clock)" column header stuck over the first song on phones; it has no use there */
+html.spo :is([data-testid=track-list],[data-testid=playlist-tracklist])>div:first-child:has([role=columnheader]){display:none!important}
 html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1{font-size:0!important}
 html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1>*{display:none!important}
 html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1::after{content:"\2716\00a0\00a0Close Library";font-size:16px;font-weight:700}

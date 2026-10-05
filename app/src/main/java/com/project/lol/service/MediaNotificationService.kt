@@ -229,7 +229,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
                 val prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
-                if (prefs.getBoolean("BtAutoPause", false)) autoPauseOnce("audio becoming noisy")
+                if (prefs.getBoolean("BtAutoPause", true)) autoPauseOnce("audio becoming noisy")
             }
         }
     }
@@ -239,7 +239,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             val prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
             when (intent.action) {
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                    if (prefs.getBoolean("BtAutoPause", false)) autoPauseOnce("acl disconnected")
+                    if (prefs.getBoolean("BtAutoPause", true)) autoPauseOnce("acl disconnected")
                 }
                 BluetoothDevice.ACTION_ACL_CONNECTED -> {
                     if (prefs.getBoolean("BtAutoResume", false)) autoResumeOnce("acl connected")
@@ -279,7 +279,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             knownRouteIds.removeAll(removedDevices.map { it.id }.toSet())
             if (!isPlaying) return
             val prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
-            if (!prefs.getBoolean("BtAutoPause", false)) return
+            if (!prefs.getBoolean("BtAutoPause", true)) return
             if (removedDevices.none { isRemoteOutput(it.type) }) return
             val stillRemote = getSystemService(AudioManager::class.java)
                 .getDevices(AudioManager.GET_DEVICES_OUTPUTS)

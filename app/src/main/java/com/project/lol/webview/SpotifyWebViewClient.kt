@@ -103,7 +103,7 @@ class SpotifyWebViewClient(
         val useProxy = prefs?.getString("ConnectionMode", "normal") == "proxy"
         val powerSave = prefs?.getBoolean("PowerSave", false) ?: false
         val blockSW = prefs?.getBoolean("BlockServiceWorker", true) ?: true
-        val hideEmptyPlayer = prefs?.getBoolean("HideEmptyPlayer", false) ?: false
+        val hideEmptyPlayer = prefs?.getBoolean("HideEmptyPlayer", true) ?: false
         val playlistSort = prefs?.getBoolean("PlaylistSortEnabled", true) ?: true
         val showScrollbar = prefs?.getBoolean("ShowScrollbar", true) ?: true
 
@@ -150,7 +150,7 @@ class SpotifyWebViewClient(
         val useProxy = prefs.getString("ConnectionMode", "normal") == "proxy"
         val powerSave = prefs.getBoolean("PowerSave", false)
         val blockSW = prefs.getBoolean("BlockServiceWorker", true)
-        val hideEmptyPlayer = prefs.getBoolean("HideEmptyPlayer", false)
+        val hideEmptyPlayer = prefs.getBoolean("HideEmptyPlayer", true)
         val playlistSort = prefs.getBoolean("PlaylistSortEnabled", true)
         val showScrollbar = prefs.getBoolean("ShowScrollbar", true)
         // Each payload runs in its own try/catch, matching the old behaviour where each
@@ -323,7 +323,7 @@ class SpotifyWebViewClient(
         val useProxy = prefs.getString("ConnectionMode", "normal") == "proxy"
         val debugOverlay = Logger.isEnabled()
         val takeControl = prefs.getBoolean("TakeControl", true)
-        val hideEmptyPlayer = prefs.getBoolean("HideEmptyPlayer", false)
+        val hideEmptyPlayer = prefs.getBoolean("HideEmptyPlayer", true)
         val playlistSortEnabled = prefs.getBoolean("PlaylistSortEnabled", true)
         val showScrollbar = prefs.getBoolean("ShowScrollbar", true)
         val lyricsStyle = prefs.getString("LyricsStyle", LyricsTheme.DEFAULT_STYLE) ?: LyricsTheme.DEFAULT_STYLE
@@ -466,7 +466,7 @@ class SpotifyWebViewClient(
                     }
                 }
                 "HideEmptyPlayer" -> {
-                    val hideEmpty = prefs.getBoolean("HideEmptyPlayer", false)
+                    val hideEmpty = prefs.getBoolean("HideEmptyPlayer", true)
                     wv.evaluateJavascript("window.__splHideEmpty=$hideEmpty; if(window.splApplyEmpty) window.splApplyEmpty();", null)
                 }
                 "PlaylistSortEnabled" -> {

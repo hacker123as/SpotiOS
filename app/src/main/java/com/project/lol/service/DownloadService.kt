@@ -31,6 +31,33 @@ class DownloadService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
 
+    // Keep the CPU and Wi-Fi awake while a batch runs with the screen off.
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+
+    private fun holdLocks() {
+        if (wakeLock?.isHeld != true) {
+            wakeLock = (getSystemService(POWER_SERVICE) as android.os.PowerManager)
+                .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "SpotiOS:downloads")
+                .apply { setReferenceCounted(false); acquire(6 * 60 * 60 * 1000L) }
+        }
+        if (wifiLock?.isHeld != true) {
+            runCatching {
+                @Suppress("DEPRECATION")
+                wifiLock = (applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager)
+                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "SpotiOS:downloads")
+                    .apply { setReferenceCounted(false); acquire() }
+            }
+        }
+    }
+
+    private fun releaseLocks() {
+        runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
+        runCatching { wifiLock?.takeIf { it.isHeld }?.release() }
+        wakeLock = null
+        wifiLock = null
+    }
+
     private val pollRunnable = object : Runnable {
         override fun run() {
             if (!DownloadManager.isDownloading() &&
@@ -66,6 +93,7 @@ class DownloadService : Service() {
         } catch (e: Throwable) {
             Logger.e("DownloadService", "startForeground failed", e)
         }
+        holdLocks()
         handler.removeCallbacks(pollRunnable)
         handler.post(pollRunnable)
         return START_NOT_STICKY
@@ -75,6 +103,7 @@ class DownloadService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(pollRunnable)
+        releaseLocks()
         super.onDestroy()
     }
 
