@@ -76,9 +76,11 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.perf.FirebasePerformance
 import com.project.lol.BuildConfig
 import com.project.lol.R
+import com.project.lol.offline.OfflineStore
 import com.project.lol.proxy.LocalProxyManager
 import com.project.lol.ui.theme.SpotifyTheme
 import com.project.lol.util.BuildInfo
+import com.project.lol.util.NetworkState
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Bell
 import compose.icons.tablericons.Bluetooth
@@ -152,6 +154,19 @@ class SplashActivity : ComponentActivity() {
 
             LaunchedEffect(Unit) {
                 if (prefs.getBoolean("OfflineMode", false)) {
+                    startActivity(Intent(this@SplashActivity, OfflineActivity::class.java))
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+                    finish()
+                    return@LaunchedEffect
+                }
+                // No internet but songs are downloaded: go straight to the offline
+                // library instead of a web player that can't load. OfflineMode is
+                // not saved, so the next launch with a connection opens normally.
+                val openOfflineLibrary = withContext(Dispatchers.IO) {
+                    !NetworkState.isOnline(this@SplashActivity) &&
+                        runCatching { OfflineStore.loadSongs(this@SplashActivity).isNotEmpty() }.getOrDefault(false)
+                }
+                if (openOfflineLibrary) {
                     startActivity(Intent(this@SplashActivity, OfflineActivity::class.java))
                     overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
                     finish()
