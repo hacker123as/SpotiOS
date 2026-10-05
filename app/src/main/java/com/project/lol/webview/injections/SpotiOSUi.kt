@@ -73,7 +73,7 @@ html.spo-artwall body::after{
   filter:blur(18px) saturate(165%) brightness(.42);opacity:.9;transform:scale(3.4);
 }
 html.spo-lite.spo-artwall body::after,html.spo-artwall:has(#spotilol-amoled-theme) body::after{display:none!important}
-html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transparent!important}
+html.spo #main,html.spo .Root,html.spo .Root>div:has(>#main-view){background:transparent!important}
 /* ---------- "Play on" output picker ---------- */
 #spoOut{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.42);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
 #spoOut.open{opacity:1;pointer-events:auto}
@@ -151,13 +151,7 @@ html.spo :is([data-testid=track-list],[data-testid=playlist-tracklist])>div:firs
 html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1{font-size:0!important}
 html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1>*{display:none!important}
 html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1::after{content:"\2716\00a0\00a0Close Library";font-size:16px;font-weight:700}
-html.spo .Root__main-view{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 260px)!important;border-radius:26px 26px 0 0!important}
 html.spo :is(.main-view-container,.main-view-container__scroll-node,[data-testid=main-view-container]){background:transparent!important}
-html.spo :is(#main-view,.Root__main-view) main{padding-bottom:var(--spo-dock)!important}
-html.spo .Root__main-view::after{
-  content:"";position:fixed;left:0;right:0;bottom:0;height:calc(var(--spo-dock) + 24px);z-index:50;pointer-events:none;
-  background:linear-gradient(180deg,rgba(4,5,7,0),rgba(4,5,7,.55) 45%,rgba(4,5,7,.92));
-}
 
 /* ---------- typography ---------- */
 html.spo #main :is(h1,h2){letter-spacing:-.025em!important}
@@ -192,7 +186,7 @@ html.spo section a[href*="/section/"]:not(:has(img)):not(:is(h1,h2,h3,h4) *):not
   display:inline-flex!important;align-items:center!important;padding:6px 12px!important;border-radius:999px!important;background:rgba(255,255,255,.08)!important;
   box-shadow:var(--spo-rim)!important;color:var(--spo-ink-2)!important;font-size:12.5px!important;font-weight:700!important;white-space:nowrap!important;text-decoration:none!important;
 }
-html.spo :is([data-testid=entity-image],[data-testid=playlist-image],[data-testid=album-image]){border-radius:20px!important;overflow:hidden!important;box-shadow:0 28px 70px rgba(0,0,0,.6),0 8px 20px rgba(0,0,0,.35)!important}
+html.spo [data-testid=entity-image]:not([data-spo-hero-img] *){border-radius:20px!important;overflow:hidden!important;box-shadow:0 28px 70px rgba(0,0,0,.6),0 8px 20px rgba(0,0,0,.35)!important}
 html.spo [data-testid=play-button]{transition:transform .34s var(--spo-spring)!important}
 html.spo [data-testid=play-button]>span:first-child{box-shadow:0 12px 32px rgba(30,215,96,.38),inset 0 1px 0 rgba(255,255,255,.42),inset 0 -3px 8px rgba(0,0,0,.14)!important}
 html.spo [data-testid=play-button]:active{transform:scale(.9)!important}
@@ -229,11 +223,11 @@ html.spo [data-tippy-root] [role=menu] :is(hr,[role=separator]){border:0!importa
 html.spo-menu #spoScrim{opacity:1}
 html.spo .ReactModal__Overlay{background:rgba(0,0,0,.42)!important;backdrop-filter:blur(14px)!important;-webkit-backdrop-filter:blur(14px)!important}
 html.spo .ReactModal__Content{background:rgba(30,30,36,.78)!important;backdrop-filter:blur(40px) saturate(200%)!important;-webkit-backdrop-filter:blur(40px) saturate(200%)!important;border:0!important;border-radius:28px!important;box-shadow:var(--spo-rim),var(--spo-drop)!important;overflow:hidden!important;max-width:calc(100vw - 20px)!important}
-html.spo [data-testid=lyrics-container],html.spo :has(>[data-testid=fullscreen-lyric]){--lyrics-color-active:#fff!important;--lyrics-color-inactive:rgba(255,255,255,.34)!important;--lyrics-color-passed:rgba(255,255,255,.58)!important}
-html.spo [data-testid=fullscreen-lyric]{font-size:clamp(24px,7vw,36px)!important;font-weight:800!important;line-height:1.22!important;letter-spacing:-.022em!important}
+html.spo [data-testid=lyrics-container],html.spo :has(>:is([data-testid=fullscreen-lyric],[data-testid=lyrics-line])){--lyrics-color-active:#fff!important;--lyrics-color-inactive:rgba(255,255,255,.34)!important;--lyrics-color-passed:rgba(255,255,255,.58)!important}
+html.spo :is([data-testid=fullscreen-lyric],[data-testid=lyrics-line]){font-size:clamp(24px,7vw,36px)!important;font-weight:800!important;line-height:1.22!important;letter-spacing:-.022em!important}
 html.spo [data-testid=lyrics-container]{padding-bottom:var(--spo-dock)!important}
 html.spo #main *::-webkit-scrollbar{width:0!important;height:0!important}
-html.spo .Root__main-view main>*{animation:spoFade .4s var(--spo-ease) both}
+html.spo #main-view main>*{animation:spoFade .4s var(--spo-ease) both}
 @keyframes spoFade{from{opacity:0}to{opacity:1}}
 
 /* ---------- mini player (docked glass capsule) ---------- */
@@ -431,7 +425,6 @@ html.spo-lite *,html.spo-lite *::before,html.spo-lite *::after{backdrop-filter:n
 html.spo-lite body::before{display:none!important}
 html.spo-lite #spotilolPlayerControls,html.spo-lite #spoTabs{background:rgba(26,26,31,.97)!important}
 html.spo-lite #spoNP .spo-bg img{filter:blur(28px) brightness(.5)}
-html.spo-lite .Root__main-view::after{display:none!important}
 @media (prefers-reduced-motion:reduce){
   html.spo body::before{animation:none!important}
   #spoNP,#spoTabs,html.spo #spotilolPlayerControls{transition-duration:.01s!important}
@@ -440,7 +433,7 @@ html.spo-lite .Root__main-view::after{display:none!important}
 /* ================= 2.9: phone pages, rebuilt against Spotify's real markup ================= */
 /* page-level scroll bars never show on a phone */
 html.spo .os-scrollbar{display:none!important}
-/* the bottom fade behind the mini player and tab bar (#main-view replaced .Root__main-view) */
+/* the bottom fade behind the mini player and tab bar (Spotify dropped the Root__* classes) */
 html.spo #main-view main{padding-bottom:calc(var(--spo-dock) + 24px)!important}
 html.spo #main-view::after{
   content:"";position:fixed;left:0;right:0;bottom:0;height:calc(var(--spo-dock) + 36px);z-index:50;pointer-events:none;
@@ -1367,7 +1360,7 @@ window.spoShare=function(){
    that keeps failing ends up on the normal reload button. */
 var crashAt=[];
 function crashScreen(){
-  var mv=qs('.Root__main-view')||qs('#main-view');if(!mv)return null;
+  var mv=qs('#main-view');if(!mv)return null;
   var b=mv.querySelector('button');if(!b||mv.querySelector('[data-testid=tracklist-row],[data-encore-id=card]'))return null;
   if(!/reload|neu laden|recargar|recarregar|ricarica|recharger|odśwież/i.test(txt(b)))return null;
   if(!/went wrong|error|fehler|erro|errore|erreur|błąd|algo sali/i.test(mv.textContent||''))return null;
