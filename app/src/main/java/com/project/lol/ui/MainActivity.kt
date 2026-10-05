@@ -212,6 +212,8 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
 
 
         prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
+        // Opening SpotiOS starts a server that was stopped with Stop server.
+        ServerMode.startFromApp(this)
         changelogOnUpdate = ChangelogPrefs.shouldShowOnUpdate(this)
         val useProxy = prefs.getString("ConnectionMode", "normal") == "proxy"
 

@@ -8,16 +8,17 @@ import org.json.JSONObject
  * Shows what's playing and on which device, whether SpotiOS is ready on Spotify Connect,
  * how to connect to it, and lets you play something on SpotiOS (recent songs, playlists,
  * liked songs, search). It also runs Server Mode's device rules:
- *  - the default device: the first device that sends music to SpotiOS is remembered, and
- *    when it starts playing on its own, SpotiOS takes the music over (take-over), unless you
- *    just moved the music from SpotiOS to it;
+ *  - take-over: when Spotify starts playing on another device (any device, or just one you
+ *    pick), SpotiOS moves the music to itself. Music you send elsewhere with Play on stays
+ *    there until that device stops, and so does music a device keeps taking back;
  *  - who may play here: everyone on the account, or only allowed devices. Spotify has no
  *    way to refuse a connection, so music sent from a blocked device is sent straight back.
  *
  * Connect state comes from ConnectKeepAlive (window.__spoConn), and everything here talks to
  * Spotify the way the web player itself does (Connect commands through window.spoCS, lists and
  * search through Spotify's GraphQL API), because the public Web API rate-limits the web player
- * and answered "too many requests" all the time. The Web API is only a fallback.
+ * and answered "too many requests" all the time. The Web API is only a fallback. Lists and
+ * play buttons retry by themselves when Spotify is busy, and lists are kept between starts.
  * Settings live in localStorage ("spoSrv").
  */
 object ServerScreen {
@@ -53,6 +54,8 @@ html.ss-on [data-tippy-root]{visibility:hidden!important}
 .ss-ib{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);
   border:1px solid var(--ss-rim);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);flex:none;transition:transform .3s var(--ss-spring)}
 .ss-ib:active{transform:scale(.88)}
+.ss-ib.stop{color:#ff6961}
+#spoSrv.ss-stopping .ss-scroll,#spoSrv.ss-stopping .ss-top{opacity:.35;pointer-events:none;transition:opacity .4s}
 .ss-scroll{position:relative;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:4px 16px calc(env(safe-area-inset-bottom,0px) + 34px);z-index:1;scrollbar-width:none}
 .ss-scroll::-webkit-scrollbar{display:none}
@@ -157,6 +160,10 @@ html.ss-on [data-tippy-root]{visibility:hidden!important}
 @keyframes ssSpin{to{transform:rotate(360deg)}}
 .ss-msg{padding:18px 4px;text-align:center;font-size:13.5px;line-height:1.45;color:var(--ss-ink2)}
 .ss-msg .ss-btn{margin-top:10px}
+.ss-msg small{display:block;margin-top:4px;font-size:12.5px;color:var(--ss-ink3)}
+.ss-spin{display:flex;justify-content:center;margin-bottom:8px;color:var(--ss-ink3)}
+.ss-spin svg{width:22px;height:22px;animation:ssSpin 1s linear infinite}
+.ss-link{margin-top:8px;font-size:13px;font-weight:600;color:var(--ss-acc)!important;padding:6px 10px!important}
 .ss-log{font-size:13px;line-height:1.4}
 .ss-log div{display:flex;gap:10px;padding:6px 0;color:var(--ss-ink2)}
 .ss-log div+div{border-top:1px solid var(--ss-sep)}
@@ -260,6 +267,9 @@ var LS='spoSrv',cfg={};
 try{cfg=JSON.parse(localStorage.getItem(LS)||'{}')||{};}catch(e){cfg={};}
 if(typeof cfg!=='object')cfg={};
 if(cfg.auto===undefined)cfg.auto=true;
+/* 2.12: take-over works from any device (it used to need a saved default device) */
+if(cfg.v!==2){cfg.v=2;cfg.auto=true;cfg.from='any';}
+if(cfg.from!=='def')cfg.from='any';
 if(cfg.policy!=='list')cfg.policy='all';
 cfg.devs=cfg.devs&&typeof cfg.devs==='object'?cfg.devs:{};
 cfg.log=Array.isArray(cfg.log)?cfg.log:[];
@@ -275,12 +285,29 @@ function why(e){var m=String(e&&e.message||'');
   if(m==='offline')return 'You’re offline.';
   if(m==='signin')return 'Spotify is still signing in.';
   if(m==='noid')return 'SpotiOS is still joining Spotify Connect. Try again in a few seconds.';
-  if(m==='http429'||m==='busy')return 'Spotify asked SpotiOS to slow down. Try again in a minute.';
+  if(m==='http429'||m==='busy')return 'Spotify is busy right now. Try again in a minute.';
   if(m==='http403')return 'Spotify didn’t allow that. Playing on other devices needs Premium.';
   if(m==='http404'||m==='http410')return 'Spotify couldn’t find that device. Tap Reconnect, then try again.';
   if(m==='nohash')return 'Spotify changed something on its side. Try again later.';
   return 'Couldn’t reach Spotify. Check the connection and try again.';}
 function quiet(e){var m=String(e&&e.message||'');return m==='offline'||m==='signin';}
+/* Worth trying again by itself: Spotify busy, still starting, or a network hiccup. */
+function retryable(e){var m=String(e&&e.message||''),c=m.indexOf('http')===0?+m.slice(4):0;return !((c>=400&&c<=404)||c===410)&&m!=='offline'&&m!=='nohash';}
+function retryWait(e,n){
+  var m=String(e&&e.message||''),w;
+  if(m==='signin'||m==='noid')w=1500;
+  else if(m==='offline')w=5000;
+  else w=[2000,4000,8000,15000,30000][n]||60000;
+  if(e&&e.retryAfter)w=Math.max(w,Math.min(60,e.retryAfter)*1000);
+  return w;
+}
+function later(ms){return new Promise(function(r){setTimeout(r,ms);});}
+/* Runs fn again (up to n times) while Spotify is busy or still starting. */
+function retry(fn,n){
+  var i=0;
+  var go=function(){return fn().catch(function(e){if(i>=n||!retryable(e))throw e;return later(Math.min(8000,retryWait(e,i++))).then(go);});};
+  return go();
+}
 /* Spotify's own Connect API, the one the web player uses (ConnectKeepAlive's window.spoCS). */
 function csCall(fn){return Promise.resolve().then(function(){var c=W.spoCS;if(!c)throw err('noid');return fn(c);});}
 /* The public Web API is only a fallback: Spotify rate-limits the web player's key there. */
@@ -356,7 +383,7 @@ function gql(op,vars,retried){
   return f('https://api-partner.spotify.com/pathfinder/v2/query',{method:'POST',headers:spHeaders(true),
       body:JSON.stringify({variables:vars,operationName:op,extensions:{persistedQuery:{version:1,sha256Hash:hash}}})})
     .then(function(r){
-      if(r.status===429)throw err('http429',429);
+      if(r.status===429)throw busyErr(r);
       return r.text().then(function(t){var j=null;try{j=t?JSON.parse(t):null;}catch(e){}return {r:r,j:j};});
     }).then(function(x){
       var j=x.j;
@@ -370,13 +397,14 @@ function gql(op,vars,retried){
       throw err(x.r.ok?'gql':'http'+x.r.status,x.r.status);
     });
 }
+function busyErr(r){var e=err('http429',429);try{e.retryAfter=+r.headers.get('retry-after')||0;}catch(x){}return e;}
 /* Spotify's own servers for the web player ("spclient"), with the player's login. */
 function spc(path){
   if(!W.spotAuthToken)return Promise.reject(err('signin'));
   if(navigator.onLine===false)return Promise.reject(err('offline'));
   var c=W.__spoConn||{},base=c.spc||'https://spclient.wg.spotify.com';
   return (W.oriFetch||W.fetch)(base+path,{headers:spHeaders(false)}).then(function(r){
-    if(r.status===429)throw err('http429',429);
+    if(r.status===429)throw busyErr(r);
     if(!r.ok)throw err('http'+r.status,r.status);
     return r.json();
   });
@@ -415,8 +443,10 @@ function known(d){
   if(ks.length>40){ks.sort(function(a,b){return (cfg.devs[a].seen||0)-(cfg.devs[b].seen||0);});for(var i=0;i<ks.length-40;i++)delete cfg.devs[ks[i]];}
 }
 function isDef(d){return !!cfg.def&&same(d,cfg.def);}
+/* the device picked under Take over > From one device */
+function isPicked(d){return cfg.from==='def'&&isDef(d);}
 function allowed(d){
-  if(!d||isDef(d))return true;
+  if(!d||isPicked(d))return true;
   var e=rec(d);
   if(!e){for(var k in cfg.devs){var o=cfg.devs[k];if(o.name===d.name&&normType(o.type)===normType(d.type)){e=o;break;}}}
   if(e&&e.allow===false)return false;
@@ -425,7 +455,8 @@ function allowed(d){
 }
 
 /* ---------- Connect state: pushed by Spotify over the player's own connection ---------- */
-var S={active:null,playing:false,devices:[],mineAt:0,hold:null,pullAt:0,pullUntil:0,fails:0,localUntil:0,pollAt:0,bounceAt:0};
+var S={active:null,playing:false,devices:[],mineAt:0,hold:null,pullAt:0,pullUntil:0,fails:0,localUntil:0,pollAt:0,bounceAt:0,
+  gap:5000,pulling:false,took:null,fights:0};
 function fromCluster(c){
   var devs=c.devices||{},list=[];
   for(var k in devs){var d=devs[k]||{};list.push({id:d.device_id||k,name:d.name||'',type:d.device_type||'',vol:d.volume});}
@@ -462,9 +493,17 @@ function onState(a,playing,list){
       S.mineAt=now();S.hold=null;
       connected(prev&&!isMine(prev)?prev:null);
     }else if(a&&prev&&isMine(prev)){
-      log('Music moved to '+(a.name||'another device'),'');
-      /* moved off SpotiOS on purpose: don't take it back until that device stops playing */
-      S.hold={id:a.id,at:now(),idle:0};
+      var nm=a.name||'another device';
+      log('Music moved to '+nm,'');
+      if(S.hold&&S.hold.id===a.id){/* sent there with Play on: it stays until that device stops */}
+      else if(S.took&&S.took.id===a.id&&now()-S.took.at<90000){
+        /* the device took it straight back: after the second time, let it keep the music */
+        if(++S.fights>=2){
+          S.fights=0;S.hold={id:a.id,at:now(),idle:0};
+          log(nm+' took the music back again, so SpotiOS leaves it there until it stops','');
+          toast('Leaving the music on '+nm);
+        }
+      }else S.fights=0;
     }
   }
   if(a&&isMine(a))S.mineAt=now();
@@ -495,9 +534,8 @@ function connected(from){
   }
   cfg.connectedOnce=true;
   if(!cfg.def){
+    /* remembered for "Take over from one device" */
     cfg.def={id:from.id,name:from.name,type:from.type};
-    log(from.name+' is now your default device','good');
-    toast('Saved '+from.name+' as your default device');
     if(shown)renderDef();
   }
   log(from.name+' connected','good');
@@ -508,21 +546,33 @@ function transferTo(id,mode){
     function(){return csCall(function(c){return c.transfer(id,mode||'resume');});},
     function(){return api('/me/player',{method:'PUT',body:{device_ids:[id],play:mode!=='pause'}});});
 }
-/* Take-over: the default device started playing, so bring the music to SpotiOS. */
+/* Take-over: Spotify started playing on another device, so bring the music to SpotiOS. */
+function takesFrom(a){
+  if(!cfg.auto||!a||isMine(a)||!allowed(a))return false;
+  return cfg.from==='def'?!!cfg.def&&isDef(a):true;
+}
+var acT=null;
 function autoConnect(){
-  if(!W.__spoServer||!cfg.auto||!cfg.def)return;
+  clearTimeout(acT);acT=null;
+  if(!W.__spoServer||W.__spoStopping||S.pulling)return;
   var a=S.active;
-  if(!a||isMine(a)||!S.playing||!isDef(a))return;
+  if(!a||!S.playing||!takesFrom(a))return;
   if(S.hold&&S.hold.id===a.id)return;
-  if(now()<S.pullUntil||now()-S.pullAt<12000)return;
-  var id=myId();if(!id)return;
-  S.pullAt=now();S.localUntil=now()+10000;
-  var name=a.name||'your default device';
-  log('Taking the music over from '+name,'good');
-  transferTo(id,'resume').then(function(){S.fails=0;toast('Now playing on SpotiOS');setTimeout(function(){poll(true);},2500);})
-    .catch(function(e){
-      if(++S.fails>=3){S.fails=0;S.pullUntil=now()+5*60000;}
-      log('Couldn’t take over from '+name+': '+why(e),'bad');
+  var id=myId(),wait=Math.max(S.pullUntil-now(),S.pullAt+S.gap-now(),id?0:2000);
+  if(wait>0){acT=setTimeout(autoConnect,wait+100);return;}
+  S.pulling=true;S.pullAt=now();S.localUntil=now()+10000;S.took={id:a.id,at:now()};
+  var name=a.name||'another device';
+  if(!S.fails)log('Taking the music over from '+name,'good');
+  transferTo(id,'resume').then(function(){
+      S.pulling=false;S.fails=0;S.gap=5000;
+      toast('Now playing on SpotiOS');setTimeout(function(){poll(true);},2500);
+    }).catch(function(e){
+      S.pulling=false;S.fails++;
+      S.gap=retryWait(e,S.fails-1);
+      if(!retryable(e)){S.fails=0;S.gap=5000;S.pullUntil=now()+3*60000;log('Couldn’t take over from '+name+': '+why(e),'bad');return;}
+      if(S.fails===1)log('Couldn’t take over from '+name+' yet. Trying again.','bad');
+      if(S.fails>=8){S.fails=0;S.gap=5000;S.pullUntil=now()+3*60000;log('Taking over paused for 3 minutes: '+why(e),'bad');}
+      autoConnect();
     });
 }
 W.spoSrvTick=function(reason){if(!W.__spoServer)return;holdCheck();poll(reason==='net');autoConnect();warmEme();};
@@ -551,6 +601,7 @@ function build(){
   el.innerHTML=
    '<div class="ss-bg" id="ss-bg"></div><div class="ss-shade"></div>'+
    '<div class="ss-top"><div class="ss-badge" id="ss-badge"><i class="ss-dot" id="ss-dot"></i><b>SpotiOS Server</b><span id="ss-state">Starting…</span></div>'+
+     '<button class="ss-ib stop" id="ss-stop" aria-label="Stop server">'+ic('power')+'</button>'+
      '<button class="ss-ib" id="ss-menu" aria-label="More">'+ic('more')+'</button></div>'+
    '<div class="ss-scroll" id="ss-scroll">'+
     '<section class="ss-np idle" id="ss-np">'+
@@ -567,9 +618,9 @@ function build(){
       '<div class="ss-chips" id="ss-chips"><button data-t="recent" class="on">Recents</button><button data-t="playlists">Playlists</button><button data-t="liked">Liked songs</button></div>'+
       '<div class="ss-list" id="ss-list"></div>'+
     '</section>'+
+    '<section class="ss-card" id="ss-def"></section>'+
     '<section class="ss-card" id="ss-conn"></section>'+
     '<section class="ss-card" id="ss-how"></section>'+
-    '<section class="ss-card" id="ss-def"></section>'+
     '<section class="ss-card" id="ss-who"></section>'+
     '<section class="ss-card" id="ss-set"></section>'+
     '<section class="ss-card" id="ss-act"></section>'+
@@ -700,21 +751,27 @@ function renderHow(){
     '<li>Leave SpotiOS running<small>Lock the phone or swipe SpotiOS away, the server keeps going. You don’t need to play anything here first.</small></li>'+
     '<li>Open Spotify<small>On this phone, a computer, a tablet, anything signed in to the same Spotify account.</small></li>'+
     '<li>Tap the devices button<small>The speaker icon at the bottom of the Now Playing screen, or next to the volume on a computer.</small></li>'+
-    '<li>Pick “'+esc(myName())+'”<small>The music plays here, and Spotify becomes the remote. The first device you do this from becomes your default device.</small></li>'+
+    '<li>Pick “'+esc(myName())+'”<small>The music plays here, and Spotify becomes the remote. With Take over on, just pressing play in Spotify is enough: SpotiOS moves the music here by itself.</small></li>'+
    '</ol><div class="ss-note">Works on any network, Wi-Fi or mobile data, because Spotify Connect goes through Spotify’s servers. If “'+esc(myName())+'” is missing from the list, tap Reconnect now above.</div>'+
    '<div class="ss-btns"><button class="ss-btn pri" data-a="spotify">'+ic('spotify')+'Open Spotify</button></div></div>';
 }
 function renderDef(){
   var el=byId('ss-def');if(!el)return;
-  var d=cfg.def,h='<div class="ss-h">'+ic('star')+'Default device</div>';
-  if(d){
-    var online=S.devices.some(function(x){return same(x,d);});
-    h+='<div class="ss-row"><div class="ss-ico g">'+ic(devIc(d.type))+'</div><div class="ss-tx"><b>'+esc(d.name)+'</b><small>'+devLabel(d.type)+(online?' · online':' · not online right now')+'</small></div></div>'+
-      '<div class="ss-row"><div class="ss-ico g">'+ic('takeover')+'</div><div class="ss-tx"><b>Take over its music</b><small>When '+esc(d.name)+' starts playing, SpotiOS moves the music here. If you move it back to '+esc(d.name)+', SpotiOS leaves it there until it stops playing.</small></div><button class="ss-sw'+(cfg.auto?' on':'')+'" data-a="auto" aria-label="Take over its music"></button></div>'+
-      '<div class="ss-btns"><button class="ss-btn sm" data-a="pickdef">Change</button><button class="ss-btn sm dng" data-a="forgetdef">Forget</button></div>';
-  }else{
-    h+='<div class="ss-msg" style="text-align:left;padding:4px 0 0">No default device yet. The first device that plays on SpotiOS becomes the default, so SpotiOS can take its music over on its own.'+
-      '<div><button class="ss-btn sm" data-a="pickdef">Choose a device</button></div></div>';
+  var d=cfg.def,any=cfg.from!=='def',who=any?'another device':(d?esc(d.name):'the device you pick');
+  var h='<div class="ss-h">'+ic('takeover')+'Take over</div>'+
+   '<div class="ss-row"><div class="ss-ico'+(cfg.auto?' g':'')+'">'+ic('cast')+'</div><div class="ss-tx"><b>Take the music over</b><small>'+
+    (cfg.auto?'When Spotify starts playing on '+who+', SpotiOS moves the music here by itself.':'Off. SpotiOS only plays what you send to it.')+
+   '</small></div><button class="ss-sw'+(cfg.auto?' on':'')+'" data-a="auto" aria-label="Take the music over"></button></div>';
+  if(cfg.auto){
+    h+='<div class="ss-seg"><button data-a="from-any"'+(any?' class="on"':'')+'>From any device</button><button data-a="from-def"'+(any?'':' class="on"')+'>From one device</button></div>';
+    if(!any){
+      if(d){
+        var online=S.devices.some(function(x){return same(x,d);});
+        h+='<div class="ss-row"><div class="ss-ico g">'+ic(devIc(d.type))+'</div><div class="ss-tx"><b>'+esc(d.name)+'</b><small>'+devLabel(d.type)+(online?' · online':' · not online right now')+'</small></div>'+
+          '<button class="ss-btn sm" data-a="pickdef">Change</button></div>';
+      }else h+='<div class="ss-btns"><button class="ss-btn sm pri" data-a="pickdef">Choose a device</button></div>';
+    }
+    h+='<div class="ss-note">To play somewhere else, pick the device under Play on and SpotiOS leaves it there until it stops. Or stop the server.</div>';
   }
   el.innerHTML=h;
 }
@@ -722,7 +779,7 @@ function devRows(){
   var map={},out=[];
   S.devices.forEach(function(d){if(!isMine(d)&&d.id){map[d.id]=1;out.push({id:d.id,name:d.name,type:d.type,on:true});}});
   Object.keys(cfg.devs).forEach(function(k){if(!map[k]){var e=cfg.devs[k];out.push({id:k,name:e.name,type:e.type,on:false,seen:e.seen});}});
-  out.sort(function(a,b){return (isDef(b)-isDef(a))||(b.on-a.on)||((b.seen||0)-(a.seen||0));});
+  out.sort(function(a,b){return (isPicked(b)-isPicked(a))||(b.on-a.on)||((b.seen||0)-(a.seen||0));});
   return out;
 }
 function renderWho(){
@@ -731,13 +788,13 @@ function renderWho(){
    '<div class="ss-seg"><button data-a="pol-all"'+(cfg.policy==='all'?' class="on"':'')+'>Every device</button><button data-a="pol-list"'+(cfg.policy==='list'?' class="on"':'')+'>Only allowed</button></div>';
   if(!rows.length)h+='<div class="ss-note" style="padding:8px 2px">Devices on your Spotify account show up here once they’re online.</div>';
   rows.slice(0,24).forEach(function(d){
-    var def=isDef(d),ok=allowed(d);
+    var def=isPicked(d),ok=allowed(d);
     var sub=devLabel(d.type)+(d.on?' · online':(d.seen?' · seen '+ago(d.seen):''));
     h+='<div class="ss-row"><div class="ss-ico'+(ok?'':' r')+'">'+ic(ok?devIc(d.type):'block')+'</div><div class="ss-tx"><b>'+esc(d.name||'Device')+
-      (def?'<span class="ss-tag">DEFAULT</span>':(ok?'':'<span class="ss-tag b">BLOCKED</span>'))+'</b><small>'+esc(sub)+'</small></div>'+
+      (def?'<span class="ss-tag">TAKE OVER</span>':(ok?'':'<span class="ss-tag b">BLOCKED</span>'))+'</b><small>'+esc(sub)+'</small></div>'+
       '<button class="ss-sw'+(ok?' on':'')+(def?' dis':'')+'" data-a="allow" data-id="'+esc(d.id)+'" aria-label="Allow '+esc(d.name)+'"></button></div>';
   });
-  h+='<div class="ss-note">Spotify can’t stop another device from picking SpotiOS, so when a blocked device sends music here, SpotiOS sends it straight back. Your default device is always allowed.</div>';
+  h+='<div class="ss-note">Spotify can’t stop another device from picking SpotiOS, so when a blocked device sends music here, SpotiOS sends it straight back.'+(cfg.from==='def'&&cfg.def?' '+esc(cfg.def.name)+' is always allowed, because SpotiOS takes its music over.':'')+'</div>';
   el.innerHTML=h;
 }
 function renderDevs(){renderWho();renderDef();}
@@ -746,13 +803,13 @@ function renderSet(){
   var ws=!!info.withSpotify,na=!!info.notifAccess;
   var h='<div class="ss-h">'+ic('settings')+'Server</div>'+
    '<div class="ss-row"><div class="ss-ico g">'+ic('spotify')+'</div><div class="ss-tx"><b>Start with Spotify</b><small>'+
-     (ws&&!na?'Needs notification access so SpotiOS can notice Spotify. <u data-a="notif">Allow it</u>.':'When Spotify starts playing on this phone, SpotiOS starts too'+(cfg.def&&cfg.auto?' and takes the music over':'')+'.')+
+     (ws&&!na?'Needs notification access so SpotiOS can notice Spotify. <u data-a="notif">Allow it</u>.':'When Spotify starts playing on this phone, SpotiOS starts too'+(cfg.auto?' and takes the music over':'')+'.')+
      (info.spotifyInstalled===false?' Spotify isn’t installed on this phone.':'')+'</small></div><button class="ss-sw'+(ws?' on':'')+'" data-a="withsp" aria-label="Start with Spotify"></button></div>'+
    '<div class="ss-row"><div class="ss-ico '+(info.battery?'g':'y')+'">'+ic('battery')+'</div><div class="ss-tx"><b>Battery: '+(info.battery?'unrestricted':'restricted')+'</b><small>'+
      (info.battery?'Android lets SpotiOS run in the background.':'Android may pause SpotiOS in the background and drop the connection.')+'</small></div>'+
      (info.battery?'':'<button class="ss-btn sm pri" data-a="battery">Fix</button>')+'</div>'+
-   '<div class="ss-row"><div class="ss-ico g">'+ic('swipe')+'</div><div class="ss-tx"><b>Keeps running when swiped away</b><small>Swiping SpotiOS out of recent apps doesn’t stop the server. Switch to Normal mode to stop it.</small></div></div>'+
-   '<div class="ss-btns"><button class="ss-btn sm" data-a="full">'+ic('grid')+'Browse Spotify</button><button class="ss-btn sm" data-a="settings">'+ic('settings')+'SpotiOS settings</button><button class="ss-btn sm dng" data-a="normal">'+ic('power')+'Switch to Normal mode</button></div>';
+   '<div class="ss-row"><div class="ss-ico g">'+ic('swipe')+'</div><div class="ss-tx"><b>Keeps running when swiped away</b><small>Swiping SpotiOS out of recent apps doesn’t stop the server. Tap Stop server to stop it, and open SpotiOS to start it again.</small></div></div>'+
+   '<div class="ss-btns"><button class="ss-btn sm dng" data-a="stop">'+ic('power')+'Stop server</button><button class="ss-btn sm" data-a="full">'+ic('grid')+'Browse Spotify</button><button class="ss-btn sm" data-a="settings">'+ic('settings')+'SpotiOS settings</button><button class="ss-btn sm" data-a="normal">'+ic('phone')+'Switch to Normal mode</button></div>';
   el.innerHTML=h;
 }
 function renderLog(){
@@ -764,7 +821,14 @@ function renderLog(){
 }
 
 /* ---------- play something ---------- */
-var lib={tab:'recent',q:'',items:[],req:0,qt:null,uid:'',cache:{}};
+var lib={tab:'recent',q:'',items:[],req:0,qt:null,uid:'',cache:{},tries:0,rt:null};
+/* Recents, playlists and liked songs are kept between starts, so they show at once. */
+var LISTS='spoSrvLists';
+try{var kept=JSON.parse(localStorage.getItem(LISTS)||'{}')||{};for(var kk in kept){var kv=kept[kk];if(kv&&Array.isArray(kv.items))lib.cache[kk]={at:0,items:kv.items};}}catch(e){}
+function keepLists(){
+  var o={};['recent','playlists','liked'].forEach(function(k){var c=lib.cache[k];if(c&&c.items.length)o[k]={items:c.items.slice(0,50)};});
+  try{localStorage.setItem(LISTS,JSON.stringify(o));}catch(e){}
+}
 function pick(src){
   if(!src||!src.length)return '';
   var b=null;
@@ -862,12 +926,35 @@ function fetchList(){
     });
   });
 }
-function loadList(force){
+function loadList(force,again){
+  clearTimeout(lib.rt);lib.rt=null;
+  if(!again)lib.tries=0;
   var id=++lib.req,key=lib.q?'q:'+lib.q:lib.tab,hit=lib.cache[key];
-  if(!force&&hit&&now()-hit.at<(lib.q?120000:300000)){lib.items=hit.items;renderList();return;}
-  if(hit){lib.items=hit.items;renderList();}else listMsg('Loading…');
-  fetchList().then(function(items){lib.cache[key]={at:now(),items:items};if(id!==lib.req)return;lib.items=items;renderList();})
-   .catch(function(e){if(id!==lib.req||hit)return;listMsg(esc(why(e))+'<br><button class="ss-btn sm" data-a="relist">Try again</button>');});
+  if(!force&&!again&&hit&&hit.at&&now()-hit.at<(lib.q?120000:300000)){lib.items=hit.items;renderList();return;}
+  if(hit&&hit.items.length){lib.items=hit.items;renderList();}else if(!again)listWait('');
+  fetchList().then(function(items){
+    lib.tries=0;lib.cache[key]={at:now(),items:items};
+    if(!lib.q)keepLists();
+    if(id!==lib.req)return;
+    lib.items=items;renderList();
+  }).catch(function(e){
+    if(id!==lib.req)return;
+    /* Spotify busy or still starting: keep what's shown and try again by itself */
+    var w=retryWait(e,lib.tries++);
+    if(!retryable(e)&&lib.tries>2){if(!(hit&&hit.items.length))listMsg(esc(why(e))+'<br><button class="ss-btn sm" data-a="relist">Try again</button>');return;}
+    if(!(hit&&hit.items.length))listWait(waitText(e));
+    lib.rt=setTimeout(function(){if(shown&&id===lib.req)loadList(true,true);},w);
+  });
+}
+function waitText(e){
+  var m=String(e&&e.message||'');
+  if(m==='offline')return 'Waiting for internet…';
+  if(m==='signin'||m==='noid')return 'Spotify is starting…';
+  if(m==='http429'||m==='busy')return 'Spotify is busy. Trying again by itself…';
+  return 'Couldn’t reach Spotify. Trying again by itself…';
+}
+function listWait(sub){
+  listMsg('<div class="ss-spin">'+ic('refresh')+'</div>Loading…'+(sub?'<small>'+esc(sub)+'</small><button class="ss-link" data-a="relist">Try now</button>':''));
 }
 function renderList(){
   var l=byId('ss-list');if(!l)return;
@@ -883,7 +970,7 @@ function playItem(i,row){
   np.pend=null;
   if(it.kind==='liked'){
     rowBusy(row);
-    uid().then(function(u){playCtx('spotify:user:'+u+':collection',null,row);}).catch(function(e){rowDone(row);toast(why(e));});
+    retry(uid,3).then(function(u){playCtx('spotify:user:'+u+':collection',null,row);}).catch(function(e){rowDone(row);toast(why(e));});
     return;
   }
   if(it.kind==='ctx'){playCtx(it.uri,null,row);return;}
@@ -894,7 +981,7 @@ function playItem(i,row){
   /* a song keeps going like in the app: through Liked Songs, or through its album */
   if(lib.tab==='liked'&&!lib.q){
     rowBusy(row);
-    uid().then(function(u){playCtx('spotify:user:'+u+':collection',it.uri,row);}).catch(function(e){rowDone(row);np.pend=null;toast(why(e));});
+    retry(uid,3).then(function(u){playCtx('spotify:user:'+u+':collection',it.uri,row);}).catch(function(e){rowDone(row);np.pend=null;toast(why(e));});
     return;
   }
   playCtx(it.ctx||it.uri,it.ctx?it.uri:null,row);
@@ -909,12 +996,12 @@ function playCtx(ctx,skip,row){
   haptic();
   S.localUntil=now()+10000;S.hold=null;
   var early=!!np.pend;if(early)toTop();
-  either(function(){return csCall(function(c){return c.play(ctx,skip||null,'');});},
+  retry(function(){return either(function(){return csCall(function(c){return c.play(ctx,skip||null,'');});},
     function(){
       var id=myId(),q=id?'?device_id='+encodeURIComponent(id):'',body={context_uri:ctx};
       if(skip)body.offset={uri:skip};
       return api('/me/player/play'+q,{method:'PUT',body:body});
-    })
+    });},3)
   .then(function(){
     rowDone(row);
     var all=document.querySelectorAll('#ss-list .ss-it.now');for(var k=0;k<all.length;k++)all[k].classList.remove('now');
@@ -924,7 +1011,7 @@ function playCtx(ctx,skip,row){
 }
 function toTop(){var sc=byId('ss-scroll');if(sc)sc.scrollTo({top:0,behavior:'smooth'});}
 
-/* ---------- sheets: menu, play on, default device ---------- */
+/* ---------- sheets: menu, stop, play on, take-over device ---------- */
 var sheetKind='';
 function sheetRow(attr,icon,title,sub,cls){
   return '<div class="ss-row'+(cls?' '+cls:'')+'" '+attr+'><div class="ss-ico'+(cls&&cls.indexOf('dng')>-1?' r':'')+'">'+ic(icon)+'</div><div class="ss-tx"><b>'+title+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</div>'+ic('check').replace('<svg','<svg class="ss-chk"')+'</div>';
@@ -937,12 +1024,16 @@ function openSheet(kind){
     body=sheetRow('data-m="full"','grid','Browse Spotify','Search, your library and the full player. Come back with the Server tab.')+
       sheetRow('data-m="play"','cast','Play on another device','Move the music to a speaker, computer or TV.')+
       sheetRow('data-m="settings"','settings','SpotiOS settings','Rename this speaker, look and playback.')+
-      sheetRow('data-m="normal"','power','Switch to Normal mode','Use SpotiOS as a regular Spotify app again.','dng');
+      sheetRow('data-m="normal"','phone','Switch to Normal mode','Use SpotiOS as a regular Spotify app again.')+
+      sheetRow('data-m="stop"','power','Stop server','Leave Spotify Connect and close SpotiOS. Open it again to start.','dng');
+  }else if(kind==='stop'){
+    t='Stop the server?';p='SpotiOS leaves Spotify Connect and closes. Nothing starts it again until you open SpotiOS.';
+    body=sheetRow('data-m="stop-yes"','power','Stop server','','dng')+sheetRow('data-m="cancel"','x','Keep it running','');
   }else if(kind==='normal'){
     t='Switch to Normal mode?';p='SpotiOS stops being a Spotify Connect speaker in the background and opens as a regular player. You can turn Server Mode back on in Settings.';
-    body=sheetRow('data-m="normal-yes"','power','Switch to Normal mode','','dng')+sheetRow('data-m="cancel"','x','Keep Server Mode','');
+    body=sheetRow('data-m="normal-yes"','phone','Switch to Normal mode','')+sheetRow('data-m="cancel"','x','Keep Server Mode','');
   }else if(kind==='def'){
-    t='Default device';p='When this device starts playing, SpotiOS takes the music over.';
+    t='Take over from';p='When this device starts playing, SpotiOS takes the music over.';
     body='<div class="ss-msg">Looking for devices…</div>';
   }else{
     t='Play on';p='Move the music to another device, or bring it to SpotiOS.';
@@ -967,8 +1058,8 @@ function fillSheet(){
   var h='';
   if(sheetKind==='def'){
     var rows=devRows();
-    h+=sheetRow('data-s="none"','x','No default device','Don’t take music over from any device',cfg.def?'':'cur');
     rows.forEach(function(d){h+=sheetRow('data-s="'+esc(d.id)+'"',devIc(d.type),esc(d.name),devLabel(d.type)+(d.on?' · online':''),isDef(d)?'cur':'');});
+    if(!rows.length)h+='<div class="ss-note" style="padding:10px 2px">Your devices show up here once Spotify is open on them.</div>';
   }else{
     var a=S.active,mine={id:myId(),name:myName(),type:'Smartphone'};
     var list=[mine].concat(S.devices.filter(function(d){return !isMine(d);}));
@@ -991,21 +1082,34 @@ function onSheetClick(e){
     if(m==='settings'){closeSheet();try{AndBridge.openSettings();}catch(x){}return;}
     if(m==='normal'){openSheet('normal');return;}
     if(m==='normal-yes'){closeSheet();toNormal();return;}
+    if(m==='stop'){openSheet('stop');return;}
+    if(m==='stop-yes'){stopServer();return;}
     closeSheet();return;
   }
   if(sheetKind==='def'){
     var sid=r.getAttribute('data-s');
-    if(sid==='none'){cfg.def=null;log('Default device cleared','');}
-    else{var e2=cfg.devs[sid];if(e2){cfg.def={id:sid,name:e2.name,type:e2.type};e2.allow=true;log(e2.name+' is now your default device','good');}}
-    save();closeSheet();renderDef();renderWho();renderSet();return;
+    var e2=cfg.devs[sid];if(e2){cfg.def={id:sid,name:e2.name,type:e2.type};cfg.from='def';e2.allow=true;S.hold=null;log('Take over: only from '+e2.name,'');}
+    save();closeSheet();renderDef();renderWho();renderSet();autoConnect();return;
   }
   var pid=r.getAttribute('data-p'),id=pid==='@me'?myId():pid;
   if(!id){toast('SpotiOS is still joining Spotify Connect');return;}
   S.localUntil=now()+10000;
   if(pid!=='@me')S.hold={id:id,at:now(),idle:0};else S.hold=null;
   var rs=byId('ss-sb').querySelectorAll('.ss-row');for(var k=0;k<rs.length;k++)rs[k].classList.toggle('cur',rs[k]===r);
-  transferTo(id,'resume').then(function(){closeSheet();setTimeout(function(){poll(true);},1500);})
+  retry(function(){return transferTo(id,'resume');},3).then(function(){closeSheet();setTimeout(function(){poll(true);},1500);})
     .catch(function(err2){toast(why(err2));fillSheet();});
+}
+/* Stop server: pause (so Spotify shows it stopped), then SpotiOS leaves Connect and closes. */
+function stopServer(){
+  closeSheet();
+  if(W.__spoStopping)return;
+  W.__spoStopping=true;clearTimeout(acT);
+  log('Server stopped','');
+  var el=byId('spoSrv');if(el)el.classList.add('ss-stopping');
+  toast('Stopping the server…');
+  var was=!!W.playing;
+  try{if(was&&W.actPlayPause)W.actPlayPause(false);}catch(e){}
+  setTimeout(function(){try{AndBridge.stopServer();}catch(e){}},was?700:250);
 }
 function toNormal(){
   try{AndBridge.setServerMode(false);}catch(e){}
@@ -1019,13 +1123,14 @@ function toast(m){var t=byId('ss-toast');if(!t)return;t.textContent=m;t.classLis
 function bind(el){
   el.addEventListener('click',function(e){
     var t=e.target;
-    var b=t.closest&&t.closest('[data-a],#ss-play,#ss-prev,#ss-next,#ss-on,#ss-menu,.ss-it,#ss-chips button,#ss-qx');
+    var b=t.closest&&t.closest('[data-a],#ss-play,#ss-prev,#ss-next,#ss-on,#ss-menu,#ss-stop,.ss-it,#ss-chips button,#ss-qx');
     if(!b)return;
     if(b.id==='ss-play'){haptic();try{W.actPlayPause();}catch(x){}setTimeout(renderNP,250);return;}
     if(b.id==='ss-prev'){haptic();try{W.actSkipBack();}catch(x){}return;}
     if(b.id==='ss-next'){haptic();try{W.actSkipForward();}catch(x){}return;}
     if(b.id==='ss-on'){haptic();openSheet('play');return;}
     if(b.id==='ss-menu'){haptic();openSheet('menu');return;}
+    if(b.id==='ss-stop'){haptic();openSheet('stop');return;}
     if(b.id==='ss-qx'){var q=byId('ss-q');q.value='';lib.q='';byId('ss-search').classList.remove('has');loadList();return;}
     if(b.classList.contains('ss-it')){if(!b.classList.contains('busy'))playItem(+b.getAttribute('data-i'),b);return;}
     if(b.parentNode&&b.parentNode.id==='ss-chips'){
@@ -1053,14 +1158,16 @@ function action(a,b){
     log('Reconnected by hand','');setTimeout(renderConn,500);return;
   }
   if(a==='rename'||a==='settings'){try{AndBridge.openSettings();}catch(e){}return;}
-  if(a==='auto'){cfg.auto=!cfg.auto;save();b.classList.toggle('on',cfg.auto);if(cfg.auto)S.hold=null;renderSet();if(cfg.auto)autoConnect();return;}
+  if(a==='auto'){cfg.auto=!cfg.auto;save();if(cfg.auto)S.hold=null;renderDef();renderSet();if(cfg.auto)autoConnect();return;}
+  if(a==='from-any'){cfg.from='any';S.hold=null;save();renderDef();renderSet();autoConnect();return;}
+  if(a==='from-def'){cfg.from='def';save();renderDef();if(!cfg.def)openSheet('def');else autoConnect();return;}
+  if(a==='stop'){openSheet('stop');return;}
   if(a==='pickdef'){openSheet('def');return;}
-  if(a==='forgetdef'){if(cfg.def)log('Forgot '+cfg.def.name+' as the default device','');cfg.def=null;save();renderDef();renderWho();return;}
   if(a==='pol-all'||a==='pol-list'){cfg.policy=a==='pol-list'?'list':'all';save();renderWho();
     toast(cfg.policy==='list'?'Only allowed devices can play here':'Every device on your account can play here');return;}
   if(a==='allow'){
     var id=b.getAttribute('data-id'),e=cfg.devs[id];if(!e)return;
-    if(cfg.def&&cfg.def.id===id){toast('Your default device is always allowed');return;}
+    if(cfg.from==='def'&&cfg.def&&cfg.def.id===id){toast(cfg.def.name+' is always allowed while SpotiOS takes its music over');return;}
     var nowOk=!allowed({id:id,name:e.name,type:e.type});
     e.allow=nowOk;save();renderWho();
     log((nowOk?'Allowed ':'Blocked ')+e.name,nowOk?'good':'bad');
@@ -1073,7 +1180,7 @@ function action(a,b){
   if(a==='battery'){try{AndBridge.openBatterySettings();}catch(e){}return;}
   if(a==='full'){openFull();return;}
   if(a==='normal'){openSheet('normal');return;}
-  if(a==='relist'){loadList(true);return;}
+  if(a==='relist'){loadList(true,true);return;}
 }
 
 /* refresh battery and permission rows when coming back from Android settings */

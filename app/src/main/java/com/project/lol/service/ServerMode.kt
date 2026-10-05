@@ -31,24 +31,57 @@ object ServerMode {
     const val KEY_WITH_SPOTIFY = "SpoServerWithSpotify"
     /** Set once the user picked Server or Normal (welcome screen, or once after updating). */
     const val KEY_MODE_ASKED = "ModeAsked"
+    /** Set by Stop server: the server stays off until SpotiOS is opened again. */
+    const val KEY_STOPPED = "SpoServerStopped"
     const val SPOTIFY_PACKAGE = "com.spotify.music"
 
     private const val PREFS = "spotilol_prefs"
     private const val NOTICE_CHANNEL = "spotios_server_notice"
     private const val NOTICE_ID = 7
 
-    fun isOn(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
+    /** Whether the server should be running: Server Mode is on and it wasn't stopped. */
+    fun isOn(context: Context): Boolean {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return p.getBoolean(KEY, false) && !p.getBoolean(KEY_STOPPED, false)
+    }
 
     fun setOn(context: Context, on: Boolean) {
         Logger.i(TAG, "server mode -> $on")
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY, on)
+            .putBoolean(KEY_STOPPED, false)
             .putBoolean(KEY_MODE_ASKED, true)
             .apply()
         if (on) ServerWatchdog.schedule(context) else {
             cancelNotice(context)
             ServerWatchdog.cancel(context)
+        }
+    }
+
+    /**
+     * Stop server (Server screen or notification): leaves Spotify Connect, closes SpotiOS and
+     * stops the background service. Nothing starts it again (watchdog, Start with Spotify,
+     * updates) until SpotiOS is opened, which is how it starts again.
+     */
+    fun stop(context: Context, reason: String) {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!p.getBoolean(KEY, false)) return
+        Logger.i(TAG, "server stopped ($reason)")
+        p.edit().putBoolean(KEY_STOPPED, true).commit()
+        cancelNotice(context)
+        ServerWatchdog.cancel(context)
+        com.project.lol.webview.PlayerHost.closeScreen()
+        MediaNotificationService.instance?.stopServer()
+    }
+
+    /** SpotiOS was opened: a stopped server starts again. */
+    fun startFromApp(context: Context) {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!p.getBoolean(KEY_STOPPED, false)) return
+        p.edit().putBoolean(KEY_STOPPED, false).commit()
+        if (p.getBoolean(KEY, false)) {
+            Logger.i(TAG, "server started again from the app")
+            ServerWatchdog.schedule(context)
         }
     }
 

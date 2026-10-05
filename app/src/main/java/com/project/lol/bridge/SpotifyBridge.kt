@@ -104,6 +104,16 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         ServerMode.setOn(ctx, on)
     }
 
+    /** Stop server on the Server screen: SpotiOS leaves Spotify Connect and closes. */
+    @JavascriptInterface
+    fun stopServer() {
+        val ctx = appContext() ?: return
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            ServerMode.stop(ctx, "server screen")
+            activityRef.get()?.let { runCatching { it.finishAndRemoveTask() } }
+        }
+    }
+
     @JavascriptInterface
     fun setStartWithSpotify(on: Boolean) {
         val ctx = appContext() ?: return

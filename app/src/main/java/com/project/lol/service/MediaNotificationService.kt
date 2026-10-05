@@ -79,6 +79,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         /** Server Mode: turn it off (notification action). */
         const val ACTION_SERVER_OFF = "com.project.lol.ACTION_SERVER_OFF"
         const val ACTION_SERVER_REPOST = "com.project.lol.ACTION_SERVER_REPOST"
+        /** Stop server from the notification. */
+        const val ACTION_SERVER_STOP = "com.project.lol.ACTION_SERVER_STOP"
         private const val SERVER_IDLE_MS = 2 * 60_000L
         /** Server Mode: start the player without a screen (Spotify opened, or a notification). */
         const val ACTION_SERVER_START = "com.project.lol.ACTION_SERVER_START"
@@ -252,6 +254,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
                 ACTION_FAVORITE -> wakeAndRun("actAddToFav()")
                 ACTION_WIDGET_REFRESH -> pushWidgetState(force = true)
                 ACTION_SERVER_OFF -> ServerMode.setOn(this@MediaNotificationService, false)
+                ACTION_SERVER_STOP -> stopFromNotification()
                 // The Server notification was swiped away: Server Mode is still on, so bring it back.
                 ACTION_SERVER_REPOST -> if (ServerMode.isOn(this@MediaNotificationService)) {
                     lastServerNotif = ""
@@ -358,7 +361,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     private var accentCache = 0
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == ServerMode.KEY || key == "LoggedIn") {
+        if (key == ServerMode.KEY || key == ServerMode.KEY_STOPPED || key == "LoggedIn") {
             mainHandler.post { applyServerMode() }
         }
         if (key == "PaletteSeed" || key == "MaterialYou") {
@@ -460,6 +463,34 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         mainHandler.post {
             PlayerHost.keepVisible()
             player()?.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('spotify')", null)
+        }
+    }
+
+    /** Stop in the Server notification: pause, so other devices see it stop, then stop the server. */
+    private fun stopFromNotification() {
+        player()?.evaluateJavascript("try{window.__spoStopping=true;if(window.playing&&window.actPlayPause)actPlayPause(false);}catch(e){}", null)
+        mainHandler.postDelayed({ ServerMode.stop(this, "notification") }, 600L)
+    }
+
+    /** ServerMode.stop: takes the server down now and ends the service. */
+    fun stopServer() {
+        mainHandler.post {
+            serverOn = false
+            releaseServerLocks()
+            unregisterNetworkWatch()
+            mainHandler.removeCallbacks(keepAliveTick)
+            if (PlayerHost.isHeadless) {
+                PlayerHost.destroy()
+                webView = null
+            }
+            if (::mediaSession.isInitialized) {
+                try { mediaSession.isActive = false } catch (_: Exception) {}
+            }
+            try {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+            } catch (_: Exception) {}
+            stopSelf()
         }
     }
 
@@ -929,6 +960,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             addAction(ACTION_WIDGET_REFRESH)
             addAction(ACTION_SERVER_OFF)
             addAction(ACTION_SERVER_REPOST)
+            addAction(ACTION_SERVER_STOP)
             addAction(Intent.ACTION_MEDIA_BUTTON)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1270,7 +1302,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             else -> getString(R.string.server_notif_connecting)
         }
         val off = NotificationCompat.Action.Builder(
-            tintedIcon(R.drawable.ic_pause), getString(R.string.server_notif_turn_off), getActionPendingIntent(ACTION_SERVER_OFF)
+            tintedIcon(R.drawable.ic_power), getString(R.string.server_notif_stop), getActionPendingIntent(ACTION_SERVER_STOP)
         ).build()
         // Paused for a while: say what was playing and offer to carry on.
         val paused = currentTitle.isNotEmpty()

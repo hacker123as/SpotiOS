@@ -13,7 +13,7 @@
     <string name="server_notif_reconnecting">Reconnecting to Spotify…</string>
     <string name="server_notif_offline">Waiting for internet</string>
     <string name="server_notif_signin">Open SpotiOS to sign in</string>
-    <string name="server_notif_turn_off">Turn off</string>
+    <string name="server_notif_stop">Stop server</string>
     <string name="server_notif_resume">Resume</string>
     <string name="server_notif_paused">Paused: %1$s</string>
 
@@ -25,7 +25,7 @@
     <string name="onb_mode_server_title">Server mode</string>
     <string name="onb_mode_server_desc">SpotiOS runs in the background as a speaker on Spotify Connect. Open your normal Spotify app, pick “SpotiOS” from the devices list and play through it.</string>
     <string name="onb_mode_server_point1">Keeps running when you swipe it away or lock the phone</string>
-    <string name="onb_mode_server_point2">Remembers your device and connects to it on its own</string>
+    <string name="onb_mode_server_point2">Takes the music over when Spotify starts playing on another device</string>
     <string name="onb_mode_server_point3">Shows what’s playing, and you can still pick songs</string>
     <string name="onb_continue">Continue</string>
 

@@ -230,6 +230,12 @@ object PlayerHost {
         } catch (_: Exception) {}
     }
 
+    /** Stop server: closes SpotiOS's screen if it's open (its player goes with it). */
+    fun closeScreen() {
+        val activity = owner?.get() as? Activity ?: return
+        Handler(Looper.getMainLooper()).post { runCatching { activity.finishAndRemoveTask() } }
+    }
+
     /** Drops our references to [wv] after the caller destroyed it (or its renderer died). */
     fun forget(wv: WebView?) {
         if (wv != null && wv !== webView) return

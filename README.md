@@ -150,20 +150,25 @@ SpotiOS.
   Spotify and the music starts there.
 - **It keeps running** when you swipe SpotiOS away or lock the phone. A small notification shows that the server is on
   and whether it's connected; it stays in the notification shade even when nothing has played for a long time, with
-  **Resume** for the last song. Tap **Turn off** there to stop it. If Android ever stops SpotiOS, it starts again
-  within 15 minutes (with battery optimization off).
+  **Resume** for the last song. If Android ever stops SpotiOS, it starts again within 15 minutes (with battery
+  optimization off).
+- **Stop server**: the power button at the top of the Server screen (also in **⋯** and in the notification) leaves
+  Spotify Connect and closes SpotiOS. Nothing starts it again, not even Start with Spotify, until you open SpotiOS.
 - **It stays connected.** SpotiOS checks its link to Spotify every 20 seconds, checks that Spotify still lists it, and
   reconnects on its own after a network change or a dropped connection, so it doesn't vanish from the devices list.
 - **The Server screen** replaces the full web player after you log in. It shows what's playing, with play, pause and skip,
   and your recents, playlists and liked songs, with search. Tap one to play it on SpotiOS. It uses the same Spotify
-  service the web player itself uses, so it doesn't run into "Spotify is busy" limits.
+  service the web player itself uses. If Spotify is busy anyway, lists and play buttons try again by themselves, and
+  your lists are kept, so they show at once next time.
 - **Getting around**: the **⋯** button at the top right has **Browse Spotify** (the whole web player), **Play on another
-  device**, **SpotiOS settings** and **Switch to Normal mode**. While you browse, the **Server** tab at the left of the
+  device**, **SpotiOS settings**, **Switch to Normal mode** and **Stop server**. While you browse, the **Server** tab at the left of the
   tab bar (or the back button) takes you back to the Server screen.
 - **How to connect** is on the Server screen, with a button that opens the Spotify app.
-- **Default device**: the first device that plays on SpotiOS is saved. When it starts playing later, SpotiOS moves the
-  music to itself (**Take over its music**). Change the device, or turn take-over off, on the Server screen. If you move
-  the music from SpotiOS back to that device, SpotiOS leaves it there until it stops playing.
+- **Take over**: when Spotify starts playing on another device (open Spotify on your phone and press play), SpotiOS
+  moves the music to itself within a second or two. It works from **any device**, or only **one device** you pick. To
+  play somewhere else, pick the device under **Play on** on the Server screen: SpotiOS leaves the music there until
+  that device stops. A device that takes the music straight back twice is left alone the same way, and devices that
+  aren't allowed to play on SpotiOS are never taken over from.
 - **Who can play**: allow every device, or only the ones you pick. A device that isn't allowed gets its music sent back.
 - **Start with Spotify**: SpotiOS starts the server when the Spotify app plays on this phone. This needs notification
   access (SpotiOS only looks at Spotify's notifications) and battery optimization turned off for SpotiOS. Without that,
