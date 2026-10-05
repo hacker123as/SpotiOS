@@ -945,7 +945,7 @@ class MainActivity : ComponentActivity() {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_launcher_playstore),
+                    painter = painterResource(R.drawable.ic_spotios_logo),
                     contentDescription = stringResource(R.string.main_quick_settings),
                     tint = Color.Unspecified,
                     modifier = Modifier.fillMaxSize()

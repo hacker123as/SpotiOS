@@ -51,9 +51,9 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val REPO_OWNER = "lyssadev"
-private const val REPO_NAME = "Spotilol"
-private const val RELEASES_URL = "https://github.com/lyssadev/Spotilol/releases"
+private const val REPO_OWNER = "hacker123as"
+private const val REPO_NAME = "SpotiOS"
+private const val RELEASES_URL = "https://github.com/hacker123as/SpotiOS/releases"
 
 @Composable
 fun ChangelogDialog(onDismiss: () -> Unit) {

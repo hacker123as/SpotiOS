@@ -621,7 +621,7 @@ fun OfflineScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.ic_launcher_playstore),
+                                painter = painterResource(R.drawable.ic_spotios_logo),
                                 contentDescription = stringResource(R.string.offline_desc_quick_actions),
                                 tint = Color.Unspecified,
                                 modifier = Modifier.fillMaxSize()

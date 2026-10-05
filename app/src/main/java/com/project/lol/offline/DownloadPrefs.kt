@@ -22,7 +22,7 @@ object DownloadPrefs {
     private const val KEY_FOLDER_HISTORY = "DlFolderHistory"
     private const val KEY_TAGS = "DlTags"
 
-    const val DEFAULT_SUBFOLDER = "Spotilol"
+    const val DEFAULT_SUBFOLDER = "SpotiOS"
 
     fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
