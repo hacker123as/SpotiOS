@@ -96,12 +96,12 @@ html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transpare
 @media (orientation:portrait){
   html.spo [data-spo-hero]{display:flex!important;flex-direction:column!important;align-items:center!important;text-align:center!important;gap:16px!important;height:auto!important;min-height:0!important;padding:6px 16px 4px!important}
   html.spo [data-spo-hero]>*{max-width:100%!important;align-items:center!important;text-align:center!important;margin-left:0!important;margin-right:0!important}
-  html.spo [data-spo-hero-img]{width:min(66vw,320px)!important;height:auto!important;min-width:0!important;flex:none!important;margin:0!important;aspect-ratio:1/1}
+  html.spo [data-spo-hero-img]{width:min(66vw,320px)!important;height:auto!important;min-width:0!important;flex:none!important;margin:0 auto!important;align-self:center!important;justify-self:center!important;position:relative!important;inset:auto!important;transform:none!important;aspect-ratio:1/1}
   html.spo [data-spo-hero-img] img{width:100%!important;height:100%!important;object-fit:cover!important;border-radius:16px!important;box-shadow:0 24px 60px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35)!important}
   html.spo [data-spo-hero] h1{font-size:clamp(24px,7.4vw,34px)!important;line-height:1.1!important;letter-spacing:-.025em!important;text-align:center!important}
   html.spo [data-spo-hero] :is(span,div){justify-content:center!important}
   /* track rows like the app: cover, title and artist, then the more button */
-  html.spo section:not([data-testid=artist-page]) [data-testid=tracklist-row]>[aria-colindex]:not([aria-colindex="2"]):not(:last-child){display:none!important}
+  html.spo section:not([data-testid=artist-page]) [data-testid=tracklist-row]>[aria-colindex]:not(:last-child):not(:has(a[href*="/track/"],a[href*="/episode/"],[data-testid=internal-track-link])){display:none!important}
   html.spo section:not([data-testid=artist-page]) [data-testid=tracklist-row]{grid-template-columns:[first] minmax(0,1fr) [last] auto!important}
   html.spo [data-testid=tracklist-row]{padding:4px 6px!important;min-height:58px}
   /* artist Popular list keeps its numbers, like the app */
@@ -117,8 +117,6 @@ html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transpare
   html.spo [data-spo-shortcuts]{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;padding:4px 10px 8px!important;width:auto!important}
   html.spo [data-spo-shortcuts]>*{min-width:0!important;width:auto!important;height:56px!important;border-radius:10px!important;overflow:hidden!important;background:rgba(255,255,255,.08)!important;box-shadow:var(--spo-rim)!important;backdrop-filter:blur(18px) saturate(170%);-webkit-backdrop-filter:blur(18px) saturate(170%)}
   html.spo [data-spo-shortcuts] img{width:56px!important;height:56px!important;object-fit:cover!important;border-radius:0!important}
-  html.spo section[data-testid=home-page] [data-testid=component-shelf] [data-testid=grid-container]{display:grid!important;grid-template-columns:none!important;grid-template-rows:auto!important;grid-auto-flow:column!important;grid-auto-columns:min(42vw,200px)!important;grid-auto-rows:auto!important;gap:12px!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory;padding:0 10px 6px!important;scrollbar-width:none}
-  html.spo section[data-testid=home-page] [data-testid=component-shelf] [data-testid=grid-container]>*{scroll-snap-align:start;min-width:0!important}
 }
 /* "Offline mode" under the tab bar */
 #spoOffline{position:fixed;left:0;right:0;bottom:calc(var(--spo-safe-b) + 2px);z-index:2147483644;display:none;align-items:center;justify-content:center;gap:6px;height:16px;font:700 11.5px/1 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:rgba(255,255,255,.82);pointer-events:none}
@@ -132,7 +130,6 @@ html.spo-np-open #spoOffline{display:none}
   html.spo [data-testid=tracklist-row] img{width:48px!important;height:48px!important}
 }
 /* ---------- glass on the pages themselves ---------- */
-html.spo [data-testid=topbar-content]{border-radius:0 0 22px 22px!important;background:rgba(18,18,22,.55)!important;backdrop-filter:blur(24px) saturate(180%)!important;-webkit-backdrop-filter:blur(24px) saturate(180%)!important;box-shadow:var(--spo-rim)!important}
 html.spo [data-testid=action-bar-row]{border-radius:22px!important}
 html.spo [data-encore-id=card]{background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.03))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.04)!important}
 html.spo [data-testid=tracklist-row]:hover,html.spo [role=row]:focus-within [data-testid=tracklist-row]{background:rgba(255,255,255,.05)!important}
@@ -184,8 +181,6 @@ html.spo :is(input[data-testid=search-input],form[role=search] input):focus{box-
 /* ---------- chips ---------- */
 html.spo button:has(>[data-encore-id=chip]){background:transparent!important;box-shadow:none!important;border:0!important;transition:transform .34s var(--spo-spring)!important}
 html.spo button:has(>[data-encore-id=chip]):active{transform:scale(.92)!important}
-html.spo [data-encore-id=chip]{background:rgba(255,255,255,.08)!important;box-shadow:var(--spo-rim)!important;border:0!important;border-radius:999px!important;color:#fff!important;font-weight:600!important;transition:background .18s,color .18s!important}
-html.spo :is([aria-checked=true],[aria-pressed=true])>[data-encore-id=chip]{background:var(--spo-accent)!important;color:#000!important;box-shadow:0 6px 20px rgba(30,215,96,.28)!important}
 
 /* ---------- cards, rows, buttons ---------- */
 html.spo [data-encore-id=card]{border-radius:20px!important;transition:transform .34s var(--spo-spring),background .18s!important}
@@ -367,6 +362,46 @@ html.spo-np-open #spoTabs,html.spo-menu #spoTabs{transform:translate3d(0,150%,0)
 #spoNP .spo-lyr .spo-lyr-msg button{margin-top:14px;border:0;border-radius:999px;padding:10px 18px;background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:14px}
 #spoNP .spo-lyr .spo-lyr-src{font-size:11px;font-weight:600;color:rgba(255,255,255,.38);margin-top:2.4em}
 html.spo-lite #spoNP .spo-lyr p{transition:none}
+/* our own Queue and Play-on panels: they take the artwork's place, the controls stay put */
+#spoNP .spo-pan{display:none;width:100%;max-width:560px;flex:1 1 0;min-height:0;flex-direction:column}
+#spoNP.pan .spo-pan{display:flex}
+#spoNP.pan .spo-art-wrap,#spoNP.pan .spo-lyr{display:none!important}
+#spoNP .spo-pan-h{display:flex;align-items:center;gap:8px;padding:2px 0 6px}
+#spoNP .spo-pan-t{flex:1;font-size:21px;font-weight:800;letter-spacing:-.02em}
+#spoNP .spo-pan-h .spo-ib{width:36px;height:36px;background:rgba(255,255,255,.1)}
+#spoNP .spo-pan-h .spo-ib svg{width:18px;height:18px}
+#spoNP .spo-pan-b{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding-bottom:18px;
+  -webkit-mask-image:linear-gradient(180deg,#000 0,#000 88%,transparent 100%);mask-image:linear-gradient(180deg,#000 0,#000 88%,transparent 100%)}
+#spoNP .spo-pan-b::-webkit-scrollbar{display:none}
+#spoNP .spo-pan-sec{font-size:13px;font-weight:700;color:rgba(255,255,255,.58);margin:14px 4px 6px;letter-spacing:.01em}
+#spoNP .spo-pan-sec:first-child{margin-top:4px}
+#spoNP .spo-row{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;padding:7px 6px;border:0;background:transparent;color:#fff;text-align:left;border-radius:14px;font:inherit;-webkit-tap-highlight-color:transparent;transition:background .2s,opacity .2s,transform .3s var(--spo-spring)}
+#spoNP .spo-row:active{background:rgba(255,255,255,.1);transform:scale(.985)}
+#spoNP .spo-row img,#spoNP .spo-row .ic{width:46px;height:46px;border-radius:8px;object-fit:cover;flex:none;background:rgba(255,255,255,.1)}
+#spoNP .spo-row .ic{display:flex;align-items:center;justify-content:center;border-radius:12px;color:#fff}
+#spoNP .spo-row .ic svg{width:24px;height:24px}
+#spoNP .spo-row .t{flex:1;min-width:0}
+#spoNP .spo-row b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#spoNP .spo-row small{display:block;font-size:13px;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+#spoNP .spo-row.now b,#spoNP .spo-row.act b,#spoNP .spo-row.act small{color:var(--spo-accent)}
+#spoNP .spo-row.act .ic{background:var(--spo-accent);color:#000}
+#spoNP .spo-row .eq{display:none;width:18px;height:14px;flex:none;align-items:flex-end;gap:2px}
+#spoNP .spo-row.now .eq,#spoNP .spo-row.act .eq{display:flex}
+#spoNP .spo-row .eq i{flex:1;background:var(--spo-accent);border-radius:1px;animation:spoEq 1s ease-in-out infinite}
+#spoNP .spo-row .eq i:nth-child(2){animation-delay:-.4s}
+#spoNP .spo-row .eq i:nth-child(3){animation-delay:-.7s}
+#spoNP.paused .spo-row .eq i,html.spo-lite #spoNP .spo-row .eq i{animation:none;height:40%}
+@keyframes spoEq{0%,100%{height:30%}50%{height:100%}}
+#spoNP .spo-row.busy{opacity:.45;pointer-events:none}
+#spoNP .spo-row .go{font-size:12px;font-weight:700;color:rgba(255,255,255,.5);flex:none}
+#spoNP .spo-dvol{display:flex;align-items:center;gap:10px;padding:2px 8px 8px 64px;color:rgba(255,255,255,.6)}
+#spoNP .spo-dvol svg{width:16px;height:16px;flex:none}
+#spoNP .spo-dvol input{flex:1;accent-color:var(--spo-accent);height:24px}
+#spoNP .spo-pan-msg{text-align:center;color:rgba(255,255,255,.66);padding:28px 12px;font-size:15px;font-weight:600;line-height:1.5}
+#spoNP .spo-pan-msg button,#spoNP .spo-pan-more{margin:14px 4px 0;border:0;border-radius:999px;padding:10px 18px;background:rgba(255,255,255,.14);color:#fff;font-family:inherit;font-weight:700;font-size:14px;line-height:1}
+#spoNP .spo-pan-more{display:block;margin:18px auto 0;background:transparent;color:rgba(255,255,255,.55);font-size:13px}
+#spoNP .spo-pan-hint{font-size:13px;color:rgba(255,255,255,.5);line-height:1.45;padding:6px 6px 0}
+#spoNP .spo-dev{cursor:pointer}
 /* shorter phones: shrink art and transport so the action row fits without scrolling */
 @media (orientation:portrait) and (max-height:820px){
   #spoNP .spo-in{gap:clamp(4px,1.2vh,12px)}
@@ -384,6 +419,7 @@ html.spo-lite #spoNP .spo-lyr p{transition:none}
   #spoNP .spo-head{max-width:none}
   #spoNP .spo-art-wrap{grid-column:1;grid-row:3;width:min(40vw,64vh);margin:0}
   #spoNP .spo-ctl{grid-column:2;grid-row:3;max-width:620px}
+  #spoNP .spo-lyr,#spoNP .spo-pan{grid-column:1;grid-row:3;width:min(44vw,560px);height:100%;align-self:stretch}
 }
 @media (min-width:900px) and (orientation:portrait){
   #spoNP .spo-art-wrap{width:min(70vw,46vh,620px)}
@@ -400,6 +436,160 @@ html.spo-lite .Root__main-view::after{display:none!important}
   html.spo body::before{animation:none!important}
   #spoNP,#spoTabs,html.spo #spotilolPlayerControls{transition-duration:.01s!important}
 }
+
+/* ================= 2.9: phone pages, rebuilt against Spotify's real markup ================= */
+/* page-level scroll bars never show on a phone */
+html.spo .os-scrollbar{display:none!important}
+/* the bottom fade behind the mini player and tab bar (#main-view replaced .Root__main-view) */
+html.spo #main-view main{padding-bottom:calc(var(--spo-dock) + 24px)!important}
+html.spo #main-view::after{
+  content:"";position:fixed;left:0;right:0;bottom:0;height:calc(var(--spo-dock) + 36px);z-index:50;pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.72) 40%,rgba(0,0,0,.96));
+}
+html.spo-lite #main-view::after{display:none!important}
+/* the sticky top bar: transparent at the top of a page, dark glass once Spotify fades it in on scroll */
+html.spo [data-testid=topbar-content]{background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-radius:0!important}
+html.spo header[data-testid=topbar]{pointer-events:none}
+html.spo header[data-testid=topbar] :is(button,a){pointer-events:auto}
+html.spo header[data-testid=topbar]>div:first-child{background:rgba(12,12,16,.62)!important;backdrop-filter:blur(26px) saturate(180%)!important;-webkit-backdrop-filter:blur(26px) saturate(180%)!important;box-shadow:inset 0 -1px 0 rgba(255,255,255,.06)!important}
+html.spo header[data-testid=topbar]>div:first-child>*{display:none!important}
+html.spo [data-testid=topbar-content] [data-testid=play-button]{transform:scale(.8)}
+html.spo [data-testid=topbar-content]>span{font-size:16px!important;font-weight:800!important}
+
+@media (orientation:portrait){
+  /* ---- top bar of the app: the tab bar already has Home, Search and Library ---- */
+  html.spo-tabs #global-nav-bar{background:transparent!important;padding-left:60px!important}
+  html.spo-tabs #global-nav-bar [data-testid=home-button]{display:none!important}
+  html.spo-tabs:not(.spo-route-search) #global-nav-bar form[role=search]{display:none!important}
+  /* Search tab: a big "Search" title, then a full-width search box on its own row, like the app */
+  html.spo-tabs.spo-route-search #global-nav-bar{flex-wrap:wrap!important;height:auto!important;padding:4px 16px 10px!important;row-gap:10px!important;align-items:center!important}
+  html.spo-tabs.spo-route-search #global-nav-bar::before{content:"Search";order:0;flex:1 1 auto;font-size:27px;font-weight:800;letter-spacing:-.03em;color:#fff;line-height:48px}
+  html.spo-tabs.spo-route-search #global-nav-bar>div:has(form[role=search]){order:5!important;flex:1 0 100%!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important}
+  html.spo-tabs.spo-route-search #global-nav-bar>div:has(form[role=search]) div:has(>form[role=search]),html.spo-tabs.spo-route-search #global-nav-bar>div:has(form[role=search])>div{width:100%!important;max-width:none!important;flex:1 1 auto!important;margin:0!important;padding:0!important}
+  html.spo-tabs.spo-route-search #global-nav-bar>div:last-child{order:1!important;flex:none!important;white-space:nowrap!important}
+  html.spo-tabs.spo-route-search #global-nav-bar [data-testid=signup-button]{display:none!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search]{display:flex!important;width:100%!important;max-width:none!important;position:relative!important;margin:0!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search]>div:not([class*=icon__icon]){display:block!important;flex:1 1 auto!important;width:100%!important;min-width:0!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search] input{display:block!important;width:100%!important;height:46px!important;font-size:15.5px!important;font-weight:600!important;padding-left:46px!important;background:#fff!important;color:#121212!important;caret-color:#1db954!important;border-radius:10px!important;box-shadow:0 6px 20px rgba(0,0,0,.3)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;opacity:1!important;visibility:visible!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search] input::placeholder{color:#535353!important;opacity:1!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search] :is([class*=icon__icon]) button{color:#121212!important;background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search] :is(kbd,[data-testid=browse-button]){display:none!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search]>[class*=icon__icon--leading]{position:absolute!important;left:2px!important;top:0!important;bottom:0!important;z-index:2!important;display:flex!important;align-items:center!important;width:44px!important;margin:0!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search]>[class*=icon__icon--trailing]{position:absolute!important;right:4px!important;top:0!important;bottom:0!important;z-index:2!important;display:flex!important;align-items:center!important;margin:0!important}
+  html.spo-tabs.spo-route-search #global-nav-bar form[role=search] input+div span{color:#535353!important}
+  /* search results: same side margins as Home, chips inset, song rows aligned */
+  html.spo-route-search [data-testid=grid-search-results]{padding:0 10px!important}
+  html.spo-route-search main [data-testid=carousel-scroller]:has([data-encore-id=chip])>div{padding-inline:18px!important}
+  html.spo-route-search main [data-testid=carousel-scroller]:has([data-encore-id=chip]){scroll-padding-inline:18px!important}
+  html.spo section[data-testid=search-tracks-result]{margin-bottom:22px!important}
+  html.spo section[data-testid=search-tracks-result] [data-testid=rich-title-row-shelf-header]{padding-inline:8px!important}
+  html.spo section[data-testid=search-tracks-result] [data-testid=tracklist-row]{padding-left:8px!important}
+  /* Browse all: two columns of coloured tiles */
+  html.spo-route-search section[data-testid=component-shelf]:has(a[href*="/genre/"]) [data-testid=grid-container]{grid-auto-flow:row!important;grid-template-columns:1fr 1fr!important;grid-auto-columns:auto!important;overflow:visible!important;gap:10px!important;margin:0!important;padding:0!important}
+  html.spo-tabs #Desktop_LeftSidebar_Id[style*="width: 48px"]{opacity:0!important;pointer-events:none!important}
+
+  /* ---- playlist / album header: cover, then title and details, centred ---- */
+  html.spo [data-testid=entity-header]{max-height:none!important;height:auto!important;min-height:0!important}
+  html.spo [data-testid=entity-header]>.contentSpacing{height:auto!important;min-height:0!important}
+  html.spo [data-spo-hero]>div:not([data-spo-hero-img]){width:100%!important;display:flex!important;flex-direction:column!important;align-items:center!important;gap:6px!important}
+  html.spo [data-spo-hero] [data-testid=entityTitle],html.spo [data-spo-hero] [data-testid=entityTitle]+*,html.spo [data-spo-hero] span:has(>[data-testid=entityTitle]){display:block!important;width:100%!important;max-width:100%!important}
+  html.spo [data-testid=entity-header] h1{white-space:normal!important;width:auto!important;overflow-wrap:anywhere;-webkit-line-clamp:3;display:-webkit-box!important;-webkit-box-orient:vertical;overflow:hidden}
+  html.spo section:not([data-testid=artist-page]) [data-testid=entity-header] h1{font-size:clamp(24px,7.2vw,32px)!important;line-height:1.12!important;font-weight:800!important}
+  html.spo [data-spo-hero] [data-testid=entityTitle]~*{justify-content:center!important;flex-wrap:wrap!important;row-gap:2px}
+  html.spo [data-spo-hero] [class*=encore-text-body-small]{font-size:13.5px!important}
+
+  /* ---- action row, Spotify-app order: save, download, more ... shuffle, big play ---- */
+  html.spo [data-testid=action-bar]{background:transparent!important;padding:4px 14px 6px!important}
+  html.spo [data-testid=action-bar-row]{display:flex!important;align-items:center!important;flex-wrap:nowrap!important;gap:2px!important;padding:0!important;min-height:64px;background:transparent!important}
+  html.spo [data-testid=action-bar-row-actions]{display:contents!important}
+  html.spo [data-testid=action-bar-row]>*,html.spo [data-testid=action-bar-row-actions]>*{order:3}
+  html.spo [data-testid=action-bar-row] [data-testid=add-button],html.spo [data-testid=action-bar-row] button[aria-label*=ollow]{order:1}
+  html.spo [data-testid=action-bar-row]>[data-testid=more-button]{order:4}
+  html.spo [data-testid=action-bar-row] :is(#spl-dl-skip-btn,#spl-dl-cancel-btn){order:5;width:36px!important;height:36px!important;margin:0!important}
+  html.spo [data-testid=action-bar-row] :is(#spl-dl-skip-btn,#spl-dl-cancel-btn) svg{width:20px!important;height:20px!important}
+  html.spo [data-testid=action-bar-row]::after{content:"";order:7;flex:1 1 auto}
+  html.spo [data-testid=action-bar-row] button[aria-label*=huffle]{order:8}
+  html.spo [data-testid=action-bar-row]>div:has(>[data-testid=play-button]){order:9;margin-left:6px}
+  html.spo [data-testid=action-bar-row-trailing]{display:none!important}
+  html.spo [data-testid=action-bar-row] [data-encore-id=buttonTertiary]{min-width:40px;min-height:40px}
+  html.spo [data-testid=action-bar-row] [data-encore-id=buttonTertiary] svg{width:24px!important;height:24px!important}
+  html.spo [data-testid=action-bar-row] [data-testid=play-button]>span{width:56px!important;height:56px!important;min-block-size:56px!important;min-inline-size:56px!important}
+  html.spo [data-testid=action-bar-row] button[aria-label=Follow],html.spo [data-testid=action-bar-row] button[aria-label=Following]{order:1}
+
+  /* ---- song rows: cover, title and artist, then only the more button ---- */
+  html.spo [data-testid=tracklist-row]>[aria-colindex]:last-child>:not([data-testid=more-button]){display:none!important}
+  html.spo [data-testid=tracklist-row] [data-testid=more-button]{opacity:.7!important;transform:none!important;width:36px;height:36px;color:#fff!important}
+  html.spo [data-testid=tracklist-row]>[aria-colindex="1"] button{display:none!important}
+  html.spo [data-testid=tracklist-row]{padding:6px 8px 6px 16px!important;min-height:60px;grid-gap:0 12px!important;border-radius:10px!important}
+  html.spo [data-testid=tracklist-row] [aria-colindex="2"]{gap:12px!important}
+  html.spo [data-testid=tracklist-row] [aria-colindex="2"] img{width:48px!important;height:48px!important;border-radius:6px!important;margin:0!important}
+  html.spo [data-testid=tracklist-row] [data-testid=internal-track-link]>div{font-size:15.5px!important;font-weight:500!important;line-height:1.25!important}
+  html.spo [data-testid=tracklist-row] [aria-colindex="2"] [class*=encore-text-body-small]{font-size:13.5px!important}
+  html.spo section[data-testid=artist-page] [data-testid=tracklist-row]>[aria-colindex="1"]{display:flex!important;justify-content:center}
+  html.spo section[data-testid=artist-page] [data-testid=tracklist-row]>[aria-colindex="1"] span{display:block!important;visibility:visible!important;opacity:1!important;color:var(--spo-ink-2)!important;font-size:15px!important}
+
+  /* ---- shelves: no boxes, just artwork and two lines of text, scrolling sideways ---- */
+  html.spo [data-encore-id=card]{background:transparent!important;box-shadow:none!important;padding:0!important;border-radius:0!important}
+  html.spo [data-encore-id=card] [data-testid=card-image],html.spo [data-encore-id=card] img{border-radius:8px!important;box-shadow:none!important}
+  html.spo [data-encore-id=card][aria-labelledby*=":artist:"] img{border-radius:50%!important}
+  html.spo [data-encore-id=card] :is([data-testid=card-image],[style*="--card-color"]){background:transparent!important}
+  html.spo [data-encore-id=card] :is(div,button):has(>img){box-shadow:none!important}
+  html.spo [data-encore-id=card] [data-encore-id=buttonPrimary]{display:none!important}
+  html.spo [data-encore-id=cardTitle]{font-size:13.5px!important;font-weight:600!important;margin-top:8px!important}
+  html.spo [data-encore-id=cardSubtitle]{font-size:12.5px!important;color:var(--spo-ink-2)!important}
+  html.spo section:is([data-testid=component-shelf],[data-testid$="-search-entity-shelf"]) [data-testid=grid-container]{display:grid!important;grid-template-columns:none!important;grid-template-rows:auto!important;grid-auto-flow:column!important;grid-auto-columns:clamp(118px,35vw,170px)!important;grid-auto-rows:auto!important;gap:14px!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x proximity;padding:0 18px 4px!important;margin:0 -18px!important;scrollbar-width:none;overscroll-behavior-x:contain}
+  html.spo section:is([data-testid=component-shelf],[data-testid$="-search-entity-shelf"]) [data-testid=grid-container]>*{scroll-snap-align:start;min-width:0!important;scroll-margin-left:18px}
+  /* newer carousel shelves: Spotify sizes the columns itself and relies on card padding for the gaps */
+  html.spo section:is([data-testid=component-shelf],[data-testid$="-search-entity-shelf"]) [data-testid=carousel-scroller] [role=grid]{grid-template-columns:none!important;grid-auto-flow:column!important;grid-auto-columns:clamp(118px,35vw,170px)!important;column-gap:12px!important;padding-left:40px!important;padding-right:40px!important}
+  html.spo section:is([data-testid=component-shelf],[data-testid$="-search-entity-shelf"]) [data-testid=carousel-scroller] [role=grid]>*{width:auto!important;min-width:0!important;animation:none!important;opacity:1!important;transform:none!important}
+  html.spo section:is([data-testid=component-shelf],[data-testid$="-search-entity-shelf"]) [data-testid=carousel-scroller] [data-carousel-item]{width:auto!important;animation:none!important;opacity:1!important}
+  html.spo :is([data-testid=carousel-previous-button],[data-testid=carousel-next-button]){display:none!important}
+  html.spo section:is([data-testid=component-shelf],[data-testid$="-search-entity-shelf"]){margin-bottom:22px!important;padding:0 8px!important}
+  html.spo [data-testid=rich-title-row-shelf-header]{padding:0 0 10px!important;--box-padding-inline-start:0px!important;--box-padding-inline-end:0px!important;min-height:0!important;background:transparent!important}
+  html.spo [data-testid=rich-title-row-shelf-header]>*{padding-inline:0!important}
+  html.spo [data-testid=rich-title-row-shelf-header] h2{font-size:21px!important;font-weight:800!important;letter-spacing:-.02em!important}
+  html.spo [data-testid=rich-title-row-shelf-header] h2 a{color:#fff!important;text-decoration:none!important}
+  html.spo [data-testid=rich-title-row-shelf-header] a:not(h2 a){background:transparent!important;box-shadow:none!important;padding:0!important;font-size:13px!important;font-weight:700!important;color:var(--spo-ink-2)!important;text-decoration:none!important}
+  html.spo section a[href*="/section/"]:not(:has(img)):not(:is(h1,h2,h3,h4) *):not(:is(h1,h2,h3,h4)){background:transparent!important;box-shadow:none!important;padding:0!important}
+
+  /* ---- artist page: the photo fills the header behind the name ---- */
+  html.spo-route-artist .before-scroll-node>div:not([data-testid]){height:min(54vh,470px)!important}
+  html.spo-route-artist .before-scroll-node [data-testid=background-image]{height:100%!important;top:0!important;background-position:center 22%!important}
+  /* playlists with a photo header (e.g. Today's Top Hits): tall photo, title at the bottom, like the artist page */
+  html.spo-imghdr .before-scroll-node>div:not([data-testid]){height:min(46vh,400px)!important}
+  html.spo-imghdr .before-scroll-node [data-testid=background-image]{height:100%!important;top:0!important;background-position:center 30%!important}
+  html.spo-imghdr main>section [data-testid=entity-header]{height:min(46vh,400px)!important;max-height:none!important;display:flex!important;flex-direction:column!important;justify-content:flex-end!important}
+  html.spo-imghdr [data-testid=entity-header]>.contentSpacing{padding:0 8px 14px!important}
+  html.spo-imghdr [data-testid=entity-header] h1{font-size:clamp(30px,9.5vw,44px)!important;line-height:1.02!important;font-weight:900!important;text-shadow:0 2px 20px rgba(0,0,0,.45)}
+  /* song artwork never squeezes, so titles line up */
+  html.spo [data-testid=tracklist-row]>[aria-colindex]>div:first-child:has(>img):not(:has(a)){flex:none!important;width:48px!important;height:48px!important;min-width:48px!important}
+  html.spo section[data-testid=artist-page] [data-testid=entity-header]>.contentSpacing{position:absolute!important;left:0;right:0;bottom:0;padding:0 18px 16px!important}
+
+  /* ---- home: 2-column shortcuts sit flush, chips on one row ---- */
+  html.spo [data-spo-shortcuts]>*{background:rgba(255,255,255,.09)!important;box-shadow:none!important;border-radius:6px!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  html.spo [data-spo-shortcuts] :is(p,span,a){font-size:13px!important;font-weight:700!important;line-height:1.2!important}
+}
+
+/* ---- chips: Spotify's pill is the chip's inner span; the selected one is green ---- */
+html.spo [data-encore-id=chip][class*=legacy-chip]{background:transparent!important;box-shadow:none!important;border:0!important;padding:0!important}
+html.spo [data-encore-id=chip][class*=legacy-chip]>span:first-child,html.spo [data-encore-id=chip]:not([class*=legacy-chip]){background:rgba(255,255,255,.1)!important;color:#fff!important;box-shadow:var(--spo-rim)!important;border:0!important;border-radius:999px!important;font-weight:600!important}
+html.spo [data-encore-id=chip][class*=legacy-chip]:is([aria-checked=true],[aria-pressed=true],[aria-selected=true],[class*=selected])>span:first-child,
+html.spo [data-encore-id=chip][class*=legacy-chip]>[class*=inner--selected],
+html.spo [data-encore-id=chip]:not([class*=legacy-chip]):is([aria-checked=true],[aria-pressed=true],[aria-selected=true]){background:var(--spo-accent)!important;color:#000!important;box-shadow:0 6px 18px rgba(30,215,96,.25)!important}
+html.spo [data-encore-id=chip] *{color:inherit!important}
+
+/* empty mini player: no broken-image icon before the first song */
+html.spo #spl-cover-img:is([src=""],:not([src])){opacity:0!important}
+html.spo #spotilolPlayerControls .spl-cover{background:rgba(255,255,255,.08) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff66' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E") center/52% no-repeat}
+
+/* ---- our back button (top-left, every page except Home) ---- */
+#spoBackBtn{position:fixed;z-index:60;top:calc(var(--spo-safe-t) + 4px);left:10px;width:40px;height:40px;border:0;border-radius:50%;display:none;align-items:center;justify-content:center;color:#fff;
+  background:rgba(40,40,48,.5);backdrop-filter:blur(22px) saturate(190%);-webkit-backdrop-filter:blur(22px) saturate(190%);box-shadow:var(--spo-rim),0 6px 18px rgba(0,0,0,.28);transition:transform .3s var(--spo-spring)}
+#spoBackBtn svg{width:22px;height:22px}
+#spoBackBtn:active{transform:scale(.86)}
+html.spo-tabs.spo-route-sub #spoBackBtn{display:flex}
+html.spl-libopen #spoBackBtn,html.spo-np-open #spoBackBtn,html.spo-menu #spoBackBtn{display:none!important}
+@media (orientation:landscape){#spoBackBtn{display:none!important}}
 """
 
     private const val JS = """
@@ -430,6 +620,16 @@ var I={
   pip:SV+'<rect x="3" y="4" width="18" height="14" rx="2.5"/><rect x="12" y="10.5" width="6.5" height="5" rx="1" fill="currentColor"/></svg>',
   dev:SV+'<rect x="4" y="3" width="10" height="18" rx="2"/><circle cx="9" cy="16" r="1.6"/><path d="M17.5 8.5a5 5 0 0 1 0 7M20 6a8.5 8.5 0 0 1 0 12"/></svg>',
   volLo:SV+'<path d="M11 5 6 9H3v6h3l5 4z"/></svg>',
+  x:SV+'<path d="M6 6l12 12M18 6 6 18"/></svg>',
+  refresh:SV+'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
+  laptop:SV+'<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>',
+  phone:SV+'<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg>',
+  tablet:SV+'<rect x="4.5" y="2.5" width="15" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg>',
+  speaker:SV+'<rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14" r="3.5"/><circle cx="12" cy="7" r="1"/></svg>',
+  tv:SV+'<rect x="2.5" y="4.5" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>',
+  car:SV+'<path d="M5 16v-5l2-5h10l2 5v5"/><path d="M3 11h18v5H3z"/><circle cx="7.5" cy="16.5" r="1.4"/><circle cx="16.5" cy="16.5" r="1.4"/></svg>',
+  game:SV+'<rect x="2.5" y="7" width="19" height="10" rx="5"/><path d="M7 10.5v3M5.5 12h3"/><path d="M16 11h.01M17.5 13h.01"/></svg>',
+  bt:SV+'<path d="m7 7 10 10-5 4V3l5 4L7 17"/></svg>',
   volHi:SV+'<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>'
 };
 function qs(s,r){try{return (r||document).querySelector(s);}catch(e){return null;}}
@@ -652,6 +852,7 @@ function lyrTick(){
 function toggleLyr(on){
   if(!sheet)return;
   if(on===undefined)on=!sheet.classList.contains('lyr');
+  if(on)closePan();
   sheet.classList.toggle('lyr',on);
   byId('spo-lyrics').classList.toggle('on',on);
   if(on){lyrLoad();lyrTick();}
@@ -682,6 +883,7 @@ function buildSheet(){
     +'<div class="spo-head"><button class="spo-ib" id="spo-close" aria-label="Close">'+I.down+'</button><div class="spo-head-t">Now Playing</div><button class="spo-ib" id="spo-share" aria-label="Share">'+I.share+'</button></div>'
     +'<div class="spo-art-wrap"><img id="spo-art" alt=""></div>'
     +'<div class="spo-lyr" id="spo-lyr"></div>'
+    +'<div class="spo-pan" id="spo-pan"><div class="spo-pan-h"><div class="spo-pan-t" id="spo-pan-t"></div><button class="spo-ib" id="spo-pan-r" aria-label="Refresh">'+I.refresh+'</button><button class="spo-ib" id="spo-pan-x" aria-label="Close">'+I.x+'</button></div><div class="spo-pan-b" id="spo-pan-b"></div></div>'
     +'<div class="spo-ctl">'
     +'<div class="spo-meta"><div class="spo-meta-t"><div class="spo-title" id="spo-title"></div><div class="spo-artist" id="spo-artist"></div></div><button class="spo-ib" id="spo-like" aria-label="Like">'+I.heart+'</button></div>'
     +'<div class="spo-scrub" id="spo-scrub"><div class="spo-bar"><div class="spo-fill" id="spo-fill"></div></div><div class="spo-times"><span id="spo-pos">0:00</span><span id="spo-rem">-0:00</span></div></div>'
@@ -710,8 +912,12 @@ function buildSheet(){
     if(window.__spoLrc===false){closeSheet();setTimeout(function(){act('spl-lyrics');},280);return;}
     toggleLyr();
   };
-  byId('spo-devices').onclick=function(){haptic();window.spoPickOutput();};
-  byId('spo-queue').onclick=function(){closeSheet();setTimeout(function(){act('spl-queue');},280);};
+  byId('spo-devices').onclick=function(){haptic();togglePan('dev');};
+  byId('spo-queue').onclick=function(){haptic();togglePan('queue');};
+  byId('spo-dev').onclick=function(){haptic();openPan('dev');};
+  byId('spo-pan-x').onclick=function(){haptic();closePan();};
+  byId('spo-pan-r').onclick=function(){haptic();panRefresh();};
+  bindPan();
   byId('spo-timer').onclick=function(){act('spl-timer');};
   byId('spo-dl').onclick=function(){haptic();act('spl-download');};
   byId('spo-pip').onclick=function(){closeSheet();setTimeout(function(){act('spl-pip');},300);};
@@ -839,9 +1045,162 @@ function closeSheet(){
   if(sheet)sheet.classList.remove('open');
   root().classList.remove('spo-np-open');
   if(loop){clearInterval(loop);loop=null;}
+  if(pan.k){pan.req++;clearInterval(pan.t);setTimeout(function(){if(!sheetOpen)closePan();},560);}
 }
 window.spoOpenPlayer=openSheet;
 window.spoClosePlayer=closeSheet;
+
+/* ---------- our own Queue and Play-on panels (Spotify Web API, the player's own login) ---------- */
+var pan={k:'',req:0,busy:false,t:null,key:'',n:0};
+function api(path,opt){
+  var tok=window.spotAuthToken;
+  if(!tok)return Promise.reject(new Error('signin'));
+  if(navigator.onLine===false)return Promise.reject(new Error('offline'));
+  opt=opt||{};
+  var f=window.oriFetch||window.fetch;
+  return f('https://api.spotify.com/v1'+path,{method:opt.method||'GET',headers:{'Authorization':tok,'Content-Type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined})
+    .then(function(r){
+      if(r.status===204||r.status===202)return null;
+      if(!r.ok)throw new Error('http'+r.status);
+      return r.text().then(function(t){try{return t?JSON.parse(t):null;}catch(e){return null;}});
+    });
+}
+function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';});}
+function itemArt(it){var im=it&&((it.album&&it.album.images)||it.images||(it.show&&it.show.images));if(!im||!im.length)return '';var x=im[1]||im[0];return x&&x.url||'';}
+function itemSub(it){return it&&it.artists?it.artists.map(function(a){return a.name;}).join(', '):((it&&it.show&&it.show.name)||'');}
+var EQ='<span class="eq"><i></i><i></i><i></i></span>';
+function trackRow(it,i,cls){
+  var a=itemArt(it);
+  return '<button type="button" class="spo-row '+(cls||'')+'" data-i="'+i+'">'+(a?'<img src="'+esc(a)+'" alt="" loading="lazy">':'<span class="ic">'+I.queue+'</span>')
+    +'<span class="t"><b>'+esc(it.name)+'</b><small>'+esc(itemSub(it))+'</small></span>'+EQ+'</button>';
+}
+function devIcon(t){
+  t=String(t||'').toLowerCase();
+  if(t==='smartphone')return I.phone;if(t==='tablet')return I.tablet;
+  if(t==='tv'||t==='castvideo'||t==='stb')return I.tv;
+  if(t==='automobile')return I.car;if(t==='gameconsole')return I.game;
+  if(t==='computer')return I.laptop;
+  return I.speaker;
+}
+function devType(t){
+  var m={computer:'Computer',smartphone:'Phone',tablet:'Tablet',speaker:'Speaker',tv:'TV',avr:'Receiver',stb:'TV box',audiodongle:'Speaker',gameconsole:'Console',castvideo:'Chromecast',castaudio:'Speaker group',automobile:'Car',smartwatch:'Watch'};
+  return m[String(t||'').toLowerCase()]||'Spotify Connect';
+}
+function myName(){return window.__spoDeviceName||'SpotiOS';}
+function isMine(d){return !!d&&((window.spotDevId&&d.id===window.spotDevId)||d.name===myName());}
+function panMsg(h){var b=byId('spo-pan-b');if(b)b.innerHTML='<div class="spo-pan-msg">'+h+'</div>';}
+function panFail(k,e){
+  var m=String(e&&e.message||'');
+  var why=m==='offline'?'You’re offline.':(m==='signin'?'Log in to Spotify to see this.':(m==='http429'?'Spotify is busy right now.':'Couldn’t reach Spotify.'));
+  panMsg(why+'<br><button type="button" data-p="retry">Try again</button><button type="button" data-p="sp'+k+'">Open Spotify’s '+(k==='queue'?'queue':'device list')+'</button>');
+}
+function panQueue(quiet){
+  var id=++pan.req;
+  if(!quiet)panMsg('Loading your queue…');
+  api('/me/player/queue').then(function(j){
+    if(id!==pan.req||pan.k!=='queue')return;
+    var q=(j&&j.queue)||[],cur=j&&j.currently_playing,h='';
+    if(cur)h+='<div class="spo-pan-sec">Now playing</div>'+trackRow(cur,-1,'now');
+    if(q.length){
+      h+='<div class="spo-pan-sec">Next up</div>';
+      q.slice(0,40).forEach(function(it,i){h+=trackRow(it,i);});
+      h+='<div class="spo-pan-hint">Tap a song to skip straight to it.</div>';
+    }else h+='<div class="spo-pan-msg">Nothing up next.<br>Long-press a song and pick Add to queue.</div>';
+    if(!cur&&!q.length)h='<div class="spo-pan-msg">Nothing is playing.<br>Play something and your queue shows up here.</div>';
+    h+='<button type="button" class="spo-pan-more" data-p="spqueue">Open Spotify’s queue</button>';
+    var b=byId('spo-pan-b'),st=b.scrollTop;b.innerHTML=h;b.scrollTop=st;b.__q=q;
+  }).catch(function(e){if(id===pan.req&&pan.k==='queue'&&!quiet)panFail('queue',e);});
+}
+function panDevices(quiet){
+  var id=++pan.req;
+  if(!quiet)panMsg('Looking for devices…');
+  api('/me/player/devices').then(function(j){
+    if(id!==pan.req||pan.k!=='dev')return;
+    var ds=(j&&j.devices)||[],mine=null,act=null,h='';
+    ds.forEach(function(d){if(!mine&&isMine(d))mine=d;if(d.is_active)act=d;});
+    var here=!act||(mine&&act.id===mine.id);
+    h+='<div class="spo-pan-sec">'+(act?'Listening on':'Nothing playing')+'</div>';
+    if(act&&!here){
+      h+='<button type="button" class="spo-row act" data-d="'+esc(act.id)+'"><span class="ic">'+devIcon(act.type)+'</span><span class="t"><b>'+esc(act.name)+'</b><small>'+devType(act.type)+'</small></span>'+EQ+'</button>';
+      if(act.volume_percent!=null&&act.supports_volume!==false)h+='<div class="spo-dvol">'+I.volLo+'<input type="range" min="0" max="100" value="'+(+act.volume_percent||0)+'" data-v="'+esc(act.id)+'" aria-label="Volume">'+I.volHi+'</div>';
+    }
+    h+='<button type="button" class="spo-row'+(here&&act?' act':'')+'" data-d="'+(mine?esc(mine.id):'@me')+'"><span class="ic">'+I.phone+'</span><span class="t"><b>This phone</b><small>'+(here&&act?'Playing on '+esc(myName()):esc(myName()))+'</small></span>'+EQ+'</button>';
+    h+='<button type="button" class="spo-row" data-p="out"><span class="ic">'+I.bt+'</span><span class="t"><b>Phone speaker or Bluetooth</b><small>Headphones, car, speakers paired to this phone</small></span></button>';
+    var others=ds.filter(function(d){return !d.is_active&&!isMine(d)&&!d.is_restricted;});
+    if(others.length){
+      h+='<div class="spo-pan-sec">Other devices</div>';
+      others.forEach(function(d){h+='<button type="button" class="spo-row" data-d="'+esc(d.id)+'"><span class="ic">'+devIcon(d.type)+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'+devType(d.type)+'</small></span><span class="go">Play here</span></button>';});
+    }else h+='<div class="spo-pan-hint">Open Spotify on a laptop, TV or speaker signed in to the same account and it shows up here.</div>';
+    h+='<button type="button" class="spo-pan-more" data-p="spdev">Open Spotify’s device list</button>';
+    var b=byId('spo-pan-b'),st=b.scrollTop;
+    if(b.querySelector('input[data-v]:active'))return;
+    b.innerHTML=h;b.scrollTop=st;
+  }).catch(function(e){if(id===pan.req&&pan.k==='dev'&&!quiet)panFail('dev',e);});
+}
+function panRefresh(quiet){if(pan.k==='queue')panQueue(quiet);else if(pan.k==='dev')panDevices(quiet);}
+function openPan(k){
+  if(!sheet)return;
+  if(!sheetOpen)openSheet();
+  if(sheet.classList.contains('lyr'))toggleLyr(false);
+  var same=pan.k===k;
+  pan.k=k;sheet.classList.add('pan');
+  byId('spo-pan-t').textContent=k==='queue'?'Queue':'Play on';
+  byId('spo-queue').classList.toggle('on',k==='queue');
+  byId('spo-devices').classList.toggle('on',k==='dev');
+  if(!same)byId('spo-pan-b').innerHTML='';
+  panRefresh(same);
+  pan.key=trackKey();
+  clearInterval(pan.t);
+  pan.t=setInterval(function(){
+    if(!sheetOpen||!pan.k||document.hidden||pan.busy)return;
+    var k2=trackKey();
+    if(k2!==pan.key){pan.key=k2;panRefresh(true);}
+    else if(pan.k==='dev'||(++pan.n)%3===0)panRefresh(true);
+  },5000);
+}
+function closePan(){
+  pan.k='';pan.req++;pan.busy=false;clearInterval(pan.t);
+  if(sheet)sheet.classList.remove('pan');
+  var q=byId('spo-queue'),d=byId('spo-devices');if(q)q.classList.remove('on');if(d)d.classList.remove('on');
+}
+function togglePan(k){if(pan.k===k&&sheet.classList.contains('pan'))closePan();else openPan(k);}
+window.spoOpenPanel=function(k){if(!sheet&&document.body)buildSheet();openPan(k==='devices'?'dev':k);};
+function skipTo(i,row){
+  if(pan.busy)return;
+  pan.busy=true;haptic();
+  if(row)row.classList.add('busy');
+  var n=Math.min(i+1,40),p=Promise.resolve();
+  if(n===1){act('spl-next');}
+  else for(var k=0;k<n;k++)p=p.then(function(){return api('/me/player/next',{method:'POST'});}).then(function(){return new Promise(function(r){setTimeout(r,160);});});
+  p.then(function(){setTimeout(function(){pan.busy=false;panRefresh(true);update();},n===1?700:900);})
+   .catch(function(e){pan.busy=false;panFail('queue',e);});
+}
+function playOn(id,row){
+  haptic();
+  if(id==='@me'){closeSheet();setTimeout(window.spoOpenDevices,280);return;}
+  if(row)row.classList.add('busy');
+  api('/me/player',{method:'PUT',body:{device_ids:[id],play:true}})
+    .then(function(){setTimeout(function(){panRefresh(true);update();},1100);})
+    .catch(function(e){if(row)row.classList.remove('busy');panFail('dev',e);});
+}
+function bindPan(){
+  var b=byId('spo-pan-b'),vt=null;
+  b.addEventListener('click',function(e){
+    var r=e.target.closest('button');if(!r)return;
+    var p=r.getAttribute('data-p');
+    if(p==='retry'){haptic();panRefresh();return;}
+    if(p==='spqueue'){closePan();closeSheet();setTimeout(function(){act('spl-queue');},300);return;}
+    if(p==='spdev'){closePan();closeSheet();setTimeout(window.spoOpenDevices,300);return;}
+    if(p==='out'){haptic();try{AndBridge.openAudioOutput();}catch(err){}return;}
+    if(r.hasAttribute('data-d')){if(!r.classList.contains('act'))playOn(r.getAttribute('data-d'),r);return;}
+    if(r.hasAttribute('data-i')){var i=+r.getAttribute('data-i');if(i>=0)skipTo(i,r);}
+  });
+  b.addEventListener('input',function(e){
+    var v=e.target.closest('input[data-v]');if(!v)return;
+    if(vt)clearTimeout(vt);
+    vt=setTimeout(function(){api('/me/player/volume?volume_percent='+(+v.value)+'&device_id='+encodeURIComponent(v.getAttribute('data-v')),{method:'PUT'}).catch(function(){});},220);
+  });
+}
 
 /* ---------- native share ---------- */
 window.spoShare=function(){
@@ -981,6 +1340,8 @@ function addDevItem(){
   var m=accountMenu();if(!m||m.querySelector('#spo-dev-item'))return;
   var last=m.lastElementChild;if(!last)return;
   var li=last.cloneNode(true);li.id='spo-dev-item';
+  /* Dev shows only with Developer mode on in Settings; it stays in the menu (hidden) as the template for "Your stats" */
+  if(!window.__spoDev)li.style.display='none';
   var target=li.querySelector('a,button,[role=menuitem]')||li;
   if(target.tagName==='A'){target.removeAttribute('href');target.removeAttribute('target');}
   target.removeAttribute('data-testid');
@@ -1047,6 +1408,30 @@ function offlineLabel(){
   if(root().classList.contains('spo-offline')!==off)root().classList.toggle('spo-offline',off);
 }
 window.addEventListener('online',offlineLabel);window.addEventListener('offline',offlineLabel);
+
+/* ---------- route classes and the back button ---------- */
+var lastPath='';
+function routes(){
+  var p=location.pathname||'/';
+  if(p!==lastPath){
+    lastPath=p;
+    var r=root(),home=(p==='/'||p===''),srch=p.indexOf('/search')===0;
+    var m={'spo-route-home':home,'spo-route-search':srch,'spo-route-artist':p.indexOf('/artist/')===0,'spo-route-sub':!home&&!srch};
+    for(var k in m){if(r.classList.contains(k)!==m[k])r.classList.toggle(k,m[k]);}
+  }
+  if(!byId('spoBackBtn')&&document.body){
+    var b=document.createElement('button');b.id='spoBackBtn';b.type='button';b.setAttribute('aria-label','Back');
+    b.innerHTML=SV+'<path d="M15 5l-7 7 7 7"/></svg>';
+    b.onclick=function(){haptic();history.back();};
+    document.body.appendChild(b);
+  }
+}
+
+/* playlists whose header is a photo instead of a cover get the tall artist-style header */
+function imgHeader(){
+  var on=!!qs('.before-scroll-node [data-testid=background-image]')&&location.pathname.indexOf('/artist/')!==0;
+  var r=root();if(r.classList.contains('spo-imghdr')!==on)r.classList.toggle('spo-imghdr',on);
+}
 
 /* ---------- start on Home, not with Library open ---------- */
 var libByUser=false,bootAt=Date.now();
@@ -1121,7 +1506,7 @@ setInterval(function(){
   var mo=!!qs('[data-tippy-root] [role=menu]');
   if(root().classList.contains('spo-menu')!==mo)root().classList.toggle('spo-menu',mo);
   if(mo)addDevItem();
-  mobileHero();homeFirst();homeShortcuts();offlineLabel();
+  routes();mobileHero();imgHeader();homeFirst();homeShortcuts();offlineLabel();
   recoverCrash();
   artWall();
   hookPlayer();

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Offline library (Your Library while offline) -->
+    <string name="offline_lib_title">Your Library</string>
+    <string name="offline_lib_youre_offline">You\'re offline</string>
+    <string name="offline_lib_offline_detail">Playing your downloads</string>
+    <string name="offline_lib_go_online">Go online</string>
+    <string name="offline_lib_filter_playlists">Playlists</string>
+    <string name="offline_lib_filter_albums">Albums</string>
+    <string name="offline_lib_filter_songs">Songs</string>
+    <string name="offline_lib_desc_clear_filter">Clear filter</string>
+    <string name="offline_lib_desc_search">Search</string>
+    <string name="offline_lib_downloaded_songs">Downloaded songs</string>
+    <string name="offline_lib_single_songs">Single songs</string>
+    <string name="offline_lib_kind_playlist">Playlist</string>
+    <string name="offline_lib_kind_album">Album</string>
+    <string name="offline_lib_kind_songs">Songs</string>
+    <plurals name="offline_lib_songs">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <string name="offline_lib_x_of_y_downloaded">%1$d of %2$d songs downloaded</string>
+    <string name="offline_lib_n_downloaded">%1$d downloaded</string>
+    <string name="offline_lib_none_downloaded">Not downloaded</string>
+    <string name="offline_lib_not_downloaded_toast">Not downloaded</string>
+    <string name="offline_lib_nothing_to_play">Nothing from here is downloaded yet</string>
+    <string name="offline_lib_couldnt_play">Couldn\'t play this song</string>
+    <string name="offline_lib_desc_back">Back</string>
+    <string name="offline_lib_desc_shuffle">Shuffle</string>
+    <string name="offline_lib_desc_more">More options</string>
+    <string name="offline_lib_play">Play</string>
+    <string name="offline_lib_shuffle_play">Shuffle play</string>
+    <string name="offline_lib_remove_download">Remove download</string>
+    <string name="offline_lib_remove_all_downloads">Remove all downloads</string>
+    <string name="offline_lib_remove_title">Remove download?</string>
+    <string name="offline_lib_remove_message">Remove the downloaded songs of \"%1$s\" from this device? You can download it again when you\'re back online.</string>
+    <string name="offline_lib_remove">Remove</string>
+    <string name="offline_lib_playing_from_playlist">Playing from playlist</string>
+    <string name="offline_lib_playing_from_album">Playing from album</string>
+    <string name="offline_lib_playing_from_library">Playing from your library</string>
+    <string name="offline_lib_desc_close_now_playing">Close</string>
+    <string name="offline_lib_desc_open_now_playing">Open player</string>
+    <string name="offline_lib_desc_stop">Stop playback</string>
+    <string name="offline_lib_section_songs">Songs</string>
+    <string name="offline_lib_section_collections">Playlists and albums</string>
+</resources>

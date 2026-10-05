@@ -22,8 +22,8 @@ android {
         applicationId = "com.spotios.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 280
-        versionName = "2.8.0"
+        versionCode = 290
+        versionName = "2.9.0"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
@@ -122,4 +122,8 @@ dependencies {
 
     // Core library desugaring (required by NewPipeExtractor)
     coreLibraryDesugaring(libs.desugaring)
+
+    // JVM unit tests (org.json is only a stub in android.jar)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }

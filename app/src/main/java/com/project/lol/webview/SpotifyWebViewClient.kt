@@ -23,7 +23,8 @@ class SpotifyWebViewClient(
     private val onLoginRequired: () -> Unit,
     private val onNavStateChanged: ((Boolean) -> Unit)? = null,
     private val onRenderProcessGone: (() -> Unit)? = null,
-    private val onWebViewError: ((errorCode: Int, description: String) -> Unit)? = null
+    private val onWebViewError: ((errorCode: Int, description: String) -> Unit)? = null,
+    private val onUserScriptLink: ((String) -> Unit)? = null
 ) : WebViewClient() {
 
     private var currentWebView: WebView? = null
@@ -40,6 +41,18 @@ class SpotifyWebViewClient(
         val canGoBack = view?.canGoBack() == true
         Logger.d(TAG, "history: $url reload=$isReload canGoBack=$canGoBack")
         onNavStateChanged?.invoke(canGoBack)
+    }
+
+    /** A .user.js link opens the script installer instead of showing the code. */
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+        val uri = request?.url ?: return false
+        val scheme = uri.scheme?.lowercase()
+        if ((scheme == "https" || scheme == "http") && uri.path.orEmpty().lowercase().endsWith(".user.js") && onUserScriptLink != null) {
+            Logger.i(TAG, "user script link: $uri")
+            onUserScriptLink.invoke(uri.toString())
+            return true
+        }
+        return false
     }
 
     override fun onPageFinished(view: WebView?, url: String?) {
@@ -153,6 +166,7 @@ class SpotifyWebViewClient(
         val hideEmptyPlayer = prefs.getBoolean("HideEmptyPlayer", true)
         val playlistSort = prefs.getBoolean("PlaylistSortEnabled", true)
         val showScrollbar = prefs.getBoolean("ShowScrollbar", true)
+        val deviceName = deviceName(prefs)
         // Each payload runs in its own try/catch, matching the old behaviour where each
         // was a separate evaluateJavascript call and one failure didn't stop the rest.
         val parts = buildList {
@@ -161,6 +175,7 @@ class SpotifyWebViewClient(
             add("window.__splPowerSavePref=$powerSave;")
             add("window.__splHideEmpty=$hideEmptyPlayer;")
             add("window.__splPlaylistSortEnabled=$playlistSort;")
+            add("window.__spoDeviceName=${org.json.JSONObject.quote(deviceName)};")
             add(if (isGoogle) GoogleSpoof.CONTENT else BrowserSpoof.CONTENT)
             add(FetchOverride.CONTENT)
             add(AdStateHook.CONTENT)
@@ -173,6 +188,10 @@ class SpotifyWebViewClient(
         }
         return parts.joinToString("\n") { "try{\n$it\n}catch(e){}" }
     }
+
+    /** The name other Spotify devices see for this phone in Spotify Connect. */
+    private fun deviceName(prefs: android.content.SharedPreferences): String =
+        prefs.getString("SpoDeviceName", null)?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: "SpotiOS"
 
     private fun isWebPlayerUrl(url: String?): Boolean =
         url != null && (url == WEB_PLAYER_ORIGIN || url.startsWith("$WEB_PLAYER_ORIGIN/"))
@@ -336,6 +355,7 @@ class SpotifyWebViewClient(
         )
 
         val js = buildString {
+            append("window.__spoDev=${UserScripts.devMode(view.context)};\n")
             append("window.autoPlayMode='$autoPlayMode';\n")
             append("window.closeNpPref=$closeNowPlay;\n")
             append("window.__spotilolUseProxy=$useProxy;\n")
@@ -452,6 +472,18 @@ class SpotifyWebViewClient(
                     wv.evaluateJavascript(AccentTheme.buildAccentJs(wv.context), null)
                 "SpoHidePods", "SpoSwipeSkip", "SpoDoubleTapLike", "SpoStats", "SpoShake" ->
                     wv.evaluateJavascript(spoExtrasJs(prefs, full = false), null)
+                "SpoDeviceName" -> {
+                    // Spotify reads the name when the player registers, so it shows on other
+                    // devices from the next launch; keep the early payload in step for that.
+                    wv.evaluateJavascript("window.__spoDeviceName=${org.json.JSONObject.quote(deviceName(prefs))};", null)
+                    installDocumentStartScripts(wv)
+                }
+                UserScripts.DEV_MODE_KEY, UserScripts.REV_KEY -> {
+                    // New or re-enabled scripts start now; ones turned off stop at the next launch.
+                    wv.evaluateJavascript("window.__spoDev=${UserScripts.devMode(wv.context)};", null)
+                    val userJs = UserScripts.buildJs(wv.context, wv.url ?: WEB_PLAYER_ORIGIN)
+                    if (userJs.isNotEmpty()) wv.evaluateJavascript(userJs, null)
+                }
                 "SpoLrc" -> {
                     val on = prefs.getBoolean("SpoLrc", true)
                     wv.evaluateJavascript("window.__spoLrc=$on;", null)

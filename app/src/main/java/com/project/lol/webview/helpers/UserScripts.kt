@@ -1,8 +1,11 @@
 package com.project.lol.webview.helpers
 
 import android.content.Context
+import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 
 /**
@@ -18,10 +21,43 @@ object UserScripts {
         val name: String,
         val code: String,
         val enabled: Boolean = true,
+        /** Where it was installed from, for showing and reinstalling. */
+        val source: String = "",
+        /** The script's @require libraries, fetched at install time, run before it. */
+        val lib: String = "",
+    )
+
+    /** The parts of a ==UserScript== header the installer shows. */
+    data class Meta(
+        val name: String?,
+        val namespace: String?,
+        val version: String?,
+        val description: String?,
+        val author: String?,
+        val matches: List<String>,
+        val grants: List<String>,
+        val requires: List<String>,
+        val runAt: String?,
     )
 
     private const val PREFS = "spotilol_prefs"
     private const val KEY = "UserScripts"
+    const val DEV_MODE_KEY = "DevMode"
+    const val REV_KEY = "UserScriptsRev"
+    private const val MAX_BYTES = 3 * 1024 * 1024
+
+    /**
+     * Developer mode gates user scripts: the Dev menu item, the Settings tiles and
+     * running scripts at all. People who added scripts before the switch existed keep them.
+     */
+    fun devMode(context: Context): Boolean {
+        val p = context.getSharedPreferences(PREFS, 0)
+        return if (p.contains(DEV_MODE_KEY)) p.getBoolean(DEV_MODE_KEY, false) else load(context).isNotEmpty()
+    }
+
+    fun setDevMode(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, 0).edit().putBoolean(DEV_MODE_KEY, on).apply()
+    }
 
     fun load(context: Context): List<Script> {
         val raw = context.getSharedPreferences(PREFS, 0).getString(KEY, null) ?: return emptyList()
@@ -34,6 +70,8 @@ object UserScripts {
                         name = it.optString("name").ifBlank { "Untitled script" },
                         code = it.optString("code"),
                         enabled = it.optBoolean("enabled", true),
+                        source = it.optString("source"),
+                        lib = it.optString("lib"),
                     )
                 }
             }
@@ -48,9 +86,12 @@ object UserScripts {
                 put("name", it.name)
                 put("code", it.code)
                 put("enabled", it.enabled)
+                if (it.source.isNotEmpty()) put("source", it.source)
+                if (it.lib.isNotEmpty()) put("lib", it.lib)
             })
         }
-        context.getSharedPreferences(PREFS, 0).edit().putString(KEY, arr.toString()).apply()
+        // REV_KEY tells the page to run newly added or enabled scripts right away.
+        context.getSharedPreferences(PREFS, 0).edit().putString(KEY, arr.toString()).putLong(REV_KEY, System.currentTimeMillis()).apply()
     }
 
     fun newScript(code: String, name: String? = null): Script =
@@ -59,6 +100,92 @@ object UserScripts {
     /** "// @name Foo" from a userscript header. */
     fun metaName(code: String): String? =
         Regex("""//\s*@name\s+(.+)""").find(code)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+
+    private fun header(code: String): String? =
+        Regex("""==UserScript==([\s\S]*?)==/UserScript==""").find(code)?.groupValues?.get(1)
+
+    fun isUserScript(code: String): Boolean = header(code) != null
+
+    fun meta(code: String): Meta {
+        val h = header(code).orEmpty()
+        val all = Regex("""//\s*@([\w:.-]+)[ \t]+(.+)""").findAll(h).map { it.groupValues[1] to it.groupValues[2].trim() }.toList()
+        fun one(k: String) = all.firstOrNull { it.first == k }?.second
+        fun many(vararg k: String) = all.filter { it.first in k }.map { it.second }
+        return Meta(
+            name = one("name"),
+            namespace = one("namespace"),
+            version = one("version"),
+            description = one("description"),
+            author = one("author"),
+            matches = many("match", "include"),
+            grants = many("grant").filter { it != "none" },
+            requires = many("require"),
+            runAt = one("run-at"),
+        )
+    }
+
+    /** The installed script this one would replace: same @name and @namespace. */
+    fun existing(context: Context, code: String): Script? {
+        val m = meta(code)
+        val name = m.name ?: return null
+        return load(context).firstOrNull { val o = meta(it.code); o.name == name && o.namespace == m.namespace }
+    }
+
+    /** True when the script's @match/@include patterns cover open.spotify.com (or it has none). */
+    fun runsOnSpotify(code: String): Boolean = matches(code, "https://open.spotify.com/")
+
+    /** Reads a script from an http(s) link or a content:/file: URI. Call off the main thread. */
+    fun fetch(context: Context, source: String): String {
+        val uri = Uri.parse(source)
+        val bytes = when (uri.scheme?.lowercase()) {
+            "content", "file" -> context.contentResolver.openInputStream(uri)?.use { it.readNBytesCompat(MAX_BYTES) }
+                ?: error("Couldn't open that file")
+            "http", "https" -> {
+                val c = URL(source).openConnection() as HttpURLConnection
+                c.connectTimeout = 12000
+                c.readTimeout = 20000
+                c.instanceFollowRedirects = true
+                c.setRequestProperty("Accept", "text/javascript, application/javascript, text/plain, */*")
+                try {
+                    if (c.responseCode !in 200..299) error("The server answered ${c.responseCode}")
+                    c.inputStream.use { it.readNBytesCompat(MAX_BYTES) }
+                } finally { c.disconnect() }
+            }
+            else -> error("Unsupported link")
+        }
+        return bytes.toString(Charsets.UTF_8)
+    }
+
+    private fun java.io.InputStream.readNBytesCompat(max: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(16 * 1024)
+        while (true) {
+            val n = read(buf)
+            if (n < 0) break
+            out.write(buf, 0, n)
+            if (out.size() > max) error("That script is too big")
+        }
+        return out.toByteArray()
+    }
+
+    /**
+     * Saves [code] (fetching its @require libraries first), replacing an installed copy with
+     * the same name. Returns the saved script and whether it was an update. Call off the main thread.
+     */
+    fun install(context: Context, code: String, source: String): Pair<Script, Boolean> {
+        val m = meta(code)
+        val lib = buildString {
+            m.requires.filter { it.startsWith("http") }.forEach { u ->
+                runCatching { fetch(context, u) }.getOrNull()?.let { append(it).append("\n;\n") }
+            }
+        }
+        val list = load(context)
+        val old = existing(context, code)
+        val script = old?.copy(code = code, name = m.name ?: old.name, source = source, lib = lib)
+            ?: Script(UUID.randomUUID().toString(), m.name ?: "Untitled script", code, true, source, lib)
+        save(context, if (old != null) list.map { if (it.id == old.id) script else it } else list + script)
+        return script to (old != null)
+    }
 
     /** @match / @include patterns; a script with none runs everywhere on Spotify. */
     private fun matches(code: String, url: String): Boolean {
@@ -114,6 +241,7 @@ object UserScripts {
 
     /** JS for every enabled script that matches [url], or "" when there are none. */
     fun buildJs(context: Context, url: String): String {
+        if (!devMode(context)) return ""
         val active = load(context).filter { it.enabled && it.code.isNotBlank() && matches(it.code, url) }
         if (active.isEmpty()) return ""
         return buildString {
@@ -121,7 +249,9 @@ object UserScripts {
             active.forEach {
                 append("(function(){ if (window['__spoUS_").append(it.id.replace("-", "")).append("']) return; window['__spoUS_")
                     .append(it.id.replace("-", "")).append("'] = 1;\n")
-                append("try{\n").append(it.code).append("\n}catch(e){ try{ AndBridge.dbg('e', 'userscript ' + ")
+                append("try{\n")
+                if (it.lib.isNotEmpty()) append(it.lib).append("\n")
+                append(it.code).append("\n}catch(e){ try{ AndBridge.dbg('e', 'userscript ' + ")
                     .append(JSONObject.quote(it.name)).append(" + ': ' + e); }catch(e2){} }\n")
                 append("})();\n")
             }

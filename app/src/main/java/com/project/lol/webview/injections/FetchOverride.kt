@@ -26,6 +26,17 @@ object FetchOverride {
                         }
                     }
                     var url = typeof input==='string' ? input : (input ? input.url : '');
+                    // Show up as "SpotiOS" (or the name picked in Settings) in Spotify Connect
+                    // on other devices, instead of "Web Player (Chrome)".
+                    if(url && url.indexOf && url.indexOf('/track-playback/v1/devices') !== -1 && init && typeof init.body === 'string') {
+                        try {
+                            var rb = JSON.parse(init.body);
+                            if(rb && rb.device && typeof rb.device.name === 'string') {
+                                rb.device.name = window.__spoDeviceName || 'SpotiOS';
+                                init = Object.assign({}, init, { body: JSON.stringify(rb) });
+                            }
+                        } catch(e){}
+                    }
                     if(url && url.indexOf) {
                         var m = url.match(/\/from\/([A-Za-z0-9_-]+)\/to\//);
                         if(m && m[1]) window.spotDevId = m[1];

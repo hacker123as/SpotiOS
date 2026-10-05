@@ -37,6 +37,7 @@ private data class TrackMeta(
     val artist: String,
     val album: String,
     val cover: String?,
+    val durationSec: Int? = null,
 )
 
 private data class YtMeta(
@@ -288,6 +289,11 @@ object DownloadManager {
                     artist = o.optString("artist"),
                     album = o.optString("album"),
                     cover = o.optString("cover").ifBlank { null },
+                    durationSec = when {
+                        o.has("durationMs") -> (o.optLong("durationMs", 0L) / 1000L).toInt()
+                        o.has("durationSec") -> o.optInt("durationSec", 0)
+                        else -> 0
+                    }.takeIf { it > 0 },
                 )
             )
         }
@@ -315,7 +321,43 @@ object DownloadManager {
             error = false,
         )
         progress(0, "Queued ${batch.size} tracks — $name", "Queued")
+        saveManifest(appContext, name, parsed.optString("type"), collectionCover, batch)
         enqueue(appContext, DownloadJob.Collection(name, collectionCover, batch))
+    }
+
+    /**
+     * Keeps the whole track list of the playlist or album, so the offline library can show
+     * every song of it, including the ones that are not downloaded. Metadata and cover only.
+     */
+    private fun saveManifest(
+        appContext: Context,
+        name: String,
+        type: String?,
+        cover: String?,
+        tracks: List<TrackMeta>,
+    ) {
+        val manifest = CollectionManifest(
+            name = name,
+            kind = CollectionManifest.kindFromType(type),
+            cover = cover,
+            tracks = tracks.map {
+                CollectionTrack(
+                    trackId = it.trackId,
+                    title = it.title,
+                    artist = it.artist,
+                    album = it.album,
+                    durationSec = it.durationSec,
+                    cover = it.cover,
+                )
+            },
+            savedAt = System.currentTimeMillis(),
+        )
+        scope.launch {
+            if (OfflineCollections.save(appContext, manifest)) {
+                Logger.i(TAG, "saveManifest: '$name' kind=${manifest.kind} tracks=${tracks.size}")
+            }
+            OfflineCollections.fetchCover(appContext, name, cover)
+        }
     }
 
     private fun enqueue(appContext: Context, job: DownloadJob) {

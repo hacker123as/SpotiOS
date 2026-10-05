@@ -166,6 +166,8 @@ import compose.icons.tablericons.User
 import compose.icons.tablericons.UserPlus
 import compose.icons.tablericons.WaveSine
 import compose.icons.tablericons.X
+import compose.icons.tablericons.Terminal
+import compose.icons.tablericons.World
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -268,6 +270,12 @@ fun SettingsContent(
         onPauseOrDispose { }
     }
     var showDevScriptsSettings by remember { mutableStateOf(false) }
+    var devMode by remember { mutableStateOf(com.project.lol.webview.helpers.UserScripts.devMode(context)) }
+    var scriptsSummary by remember { mutableStateOf(com.project.lol.webview.helpers.UserScripts.load(context)) }
+    var showInstallLink by remember { mutableStateOf(false) }
+    var installSource by remember { mutableStateOf<String?>(null) }
+    var showDeviceName by remember { mutableStateOf(false) }
+    var deviceName by remember { mutableStateOf(prefs.getString("SpoDeviceName", null)?.takeIf { it.isNotBlank() } ?: "SpotiOS") }
     var showSaveAccountDialog by remember { mutableStateOf(false) }
     var pendingCookies by remember { mutableStateOf<String?>(null) }
     var accountNameInput by remember { mutableStateOf("") }
@@ -744,6 +752,15 @@ fun SettingsContent(
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
 
+                    SettingTile(
+                        title = "Device name",
+                        subtitle = "Your other devices see this phone as \u201c$deviceName\u201d in Spotify Connect",
+                        icon = TablerIcons.DeviceMobile,
+                        onClick = { showDeviceName = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
                     SettingSwitchTile(
                         title = stringResource(R.string.settings_android_auto),
                         subtitle = stringResource(R.string.settings_android_auto_subtitle),
@@ -973,12 +990,46 @@ fun SettingsContent(
 
             if (settingsTab == SettingsTab.Advanced) {
                 SettingSectionCard(title = "DEV", icon = TablerIcons.Code) {
-                    SettingTile(
-                        title = "User scripts",
-                        subtitle = "Run your own Tampermonkey-style scripts on Spotify. Also in the account menu as Dev",
-                        icon = TablerIcons.Code,
-                        onClick = { showDevScriptsSettings = true }
+                    SettingSwitchTile(
+                        title = "Developer mode",
+                        subtitle = if (devMode) "User scripts, the script installer and the Dev menu are on"
+                            else "Turn on to run your own scripts on Spotify, like Tampermonkey",
+                        icon = TablerIcons.Terminal,
+                        checked = devMode,
+                        onCheckedChange = {
+                            devMode = it
+                            com.project.lol.webview.helpers.UserScripts.setDevMode(context, it)
+                        }
                     )
+                    if (devMode) {
+                        HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                        val onCount = scriptsSummary.count { it.enabled }
+                        SettingTile(
+                            title = "User scripts",
+                            subtitle = if (scriptsSummary.isEmpty()) "None yet. Install one from a link or from Greasy Fork"
+                                else "${scriptsSummary.size} installed, $onCount on. Also in the account menu as Dev",
+                            icon = TablerIcons.Code,
+                            onClick = { showDevScriptsSettings = true }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                        SettingTile(
+                            title = "Install from link",
+                            subtitle = "Paste a .user.js link or a Greasy Fork script page",
+                            icon = TablerIcons.Link,
+                            onClick = { showInstallLink = true }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                        SettingTile(
+                            title = "Find scripts on Greasy Fork",
+                            subtitle = "Tap Install on a script and choose SpotiOS. If the browser only shows code, tap Share, then SpotiOS",
+                            icon = TablerIcons.World,
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://greasyfork.org/en/scripts/by-site/spotify.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                }
+                            }
+                        )
+                    }
                 }
 
                 SettingSectionCard(
@@ -1212,7 +1263,87 @@ fun SettingsContent(
     }
 
     if (showDevScriptsSettings) {
-        com.project.lol.ui.components.DevScriptsDialog(onClose = { showDevScriptsSettings = false })
+        com.project.lol.ui.components.DevScriptsDialog(onClose = {
+            showDevScriptsSettings = false
+            scriptsSummary = com.project.lol.webview.helpers.UserScripts.load(context)
+        })
+    }
+
+    if (showInstallLink) {
+        var link by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showInstallLink = false },
+            shape = RoundedCornerShape(28.dp),
+            title = { Text("Install from link", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = link, onValueChange = { link = it },
+                        label = { Text("Script link") },
+                        placeholder = { Text("https://\u2026/name.user.js") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Works with .user.js links and Greasy Fork or OpenUserJS script pages.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = link.isNotBlank(), onClick = {
+                    val intent = Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT, link.trim())
+                    val src = com.project.lol.util.IncomingLinks.userScriptSource(intent)
+                    if (src == null) {
+                        Toast.makeText(context, "That isn't a user script link", Toast.LENGTH_SHORT).show()
+                    } else {
+                        showInstallLink = false
+                        installSource = src
+                    }
+                }) { Text("Next") }
+            },
+            dismissButton = { TextButton(onClick = { showInstallLink = false }) { Text(stringResource(R.string.settings_cancel)) } }
+        )
+    }
+
+    installSource?.let { src ->
+        com.project.lol.ui.components.ScriptInstallDialog(src) {
+            installSource = null
+            devMode = com.project.lol.webview.helpers.UserScripts.devMode(context)
+            scriptsSummary = com.project.lol.webview.helpers.UserScripts.load(context)
+        }
+    }
+
+    if (showDeviceName) {
+        var name by remember { mutableStateOf(deviceName) }
+        AlertDialog(
+            onDismissRequest = { showDeviceName = false },
+            shape = RoundedCornerShape(28.dp),
+            title = { Text("Device name", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it.take(40) },
+                        label = { Text("Name in Spotify Connect") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "This is what your laptop, TV and other phones show when you pick where to play. It updates the next time SpotiOS opens.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val clean = name.trim().ifEmpty { "SpotiOS" }
+                    deviceName = clean
+                    prefs.edit().putString("SpoDeviceName", clean).apply()
+                    showDeviceName = false
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showDeviceName = false }) { Text(stringResource(R.string.settings_cancel)) } }
+        )
     }
 
     if (showDownloadsManager) {

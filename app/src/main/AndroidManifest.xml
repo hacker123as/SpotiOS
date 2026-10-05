@@ -71,6 +71,46 @@
                 <data
                     android:scheme="https"
                     android:host="spotify.link" />
+                <data
+                    android:scheme="https"
+                    android:host="spotify.app.link" />
+            </intent-filter>
+            <!-- spotify:track:..., spotify:playlist:... links -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="spotify" />
+            </intent-filter>
+            <!-- Tampermonkey-style: Greasy Fork's Install button and other .user.js links open the
+                 script installer. Several patterns because pathPattern's ".*" stops at the first dot. -->
+            <intent-filter android:label="@string/install_user_script">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.user\\.js" />
+                <data android:pathPattern=".*\\..*\\.user\\.js" />
+                <data android:pathPattern=".*\\..*\\..*\\.user\\.js" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.user\\.js" />
+            </intent-filter>
+            <!-- A downloaded .user.js file opened from Files -->
+            <intent-filter android:label="@string/install_user_script">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="application/x-javascript" />
+            </intent-filter>
+            <!-- Share a Spotify link, a Greasy Fork script page or a .user.js link to SpotiOS -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 

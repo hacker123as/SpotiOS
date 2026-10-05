@@ -167,6 +167,7 @@ function openMore(){
     var k2=m.getAttribute('data-m');hap();
     if(k2==='stats'){openStats();return;}
     closeX();
+    if(k2==='queue'&&window.spoOpenPanel){window.spoOpenPanel('queue');return;}
     var link=null;
     if(k2==='artist')link=qs('a[data-testid=context-item-info-artist]')||qs('a[data-testid=context-item-info-show]');
     if(k2==='album')link=qs('a[data-testid=context-item-link]');
@@ -334,7 +335,7 @@ window.spoOpenStats=openStats;
 /* account menu: "Your stats" next to Dev */
 function addStatsItem(){
   var dev=byId('spo-dev-item');if(!dev||byId('spo-stats-item'))return;
-  var li=dev.cloneNode(true);li.id='spo-stats-item';
+  var li=dev.cloneNode(true);li.id='spo-stats-item';li.style.display='';
   var walk=document.createTreeWalker(li,NodeFilter.SHOW_TEXT);
   while(walk.nextNode()){if(walk.currentNode.nodeValue.trim()){walk.currentNode.nodeValue='Your stats';break;}}
   li.addEventListener('click',function(e){
@@ -352,8 +353,14 @@ function tagPods(){
   if(home){
     var shelves=home.querySelectorAll('section[data-testid=component-shelf]:not([data-spo-podchk])');
     for(var i=0;i<shelves.length;i++){
-      var links=shelves[i].querySelectorAll('[data-testid=grid-container] a[href]');if(links.length<2)continue;
-      var p=0;for(var j=0;j<links.length;j++)if(POD.test(links[j].getAttribute('href')))p++;
+      /* grid shelves link their cards; newer carousel shelves only name them in aria-labelledby */
+      var links=shelves[i].querySelectorAll('[data-encore-id=card]');if(links.length<2)links=shelves[i].querySelectorAll('[data-testid=grid-container] a[href]');if(links.length<2)continue;
+      var p=0;
+      for(var j=0;j<links.length;j++){
+        var a=links[j].matches('a[href]')?links[j]:links[j].querySelector('a[href]');
+        var ref=(links[j].getAttribute('aria-labelledby')||'')+' '+(a?a.getAttribute('href'):'');
+        if(POD.test(ref)||/:(show|episode|audiobook):/.test(ref))p++;
+      }
       shelves[i].setAttribute('data-spo-podchk','');
       if(p*2>=links.length)shelves[i].setAttribute('data-spo-pod','');
     }

@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.project.lol.offline.OfflineCollections
 import com.project.lol.offline.OfflineSong
 import com.project.lol.offline.OfflineStore
 import compose.icons.TablerIcons
@@ -50,29 +51,41 @@ fun DownloadsManagerDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var songs by remember { mutableStateOf<List<OfflineSong>?>(null) }
+    // Playlists and albums with a saved track list, even when none of their songs are on the device.
+    var collectionNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var confirmAll by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        songs = withContext(Dispatchers.IO) { runCatching { OfflineStore.loadSongs(context) }.getOrDefault(emptyList()) }
+        val (loaded, names) = withContext(Dispatchers.IO) {
+            val s = runCatching { OfflineStore.loadSongs(context) }.getOrDefault(emptyList())
+            val n = runCatching { OfflineCollections.loadAll(context).map { it.name } }.getOrDefault(emptyList())
+            s to n
+        }
+        collectionNames = names
+        songs = loaded
     }
 
-    fun delete(list: List<OfflineSong>) {
-        if (list.isEmpty() || busy) return
+    fun delete(name: String?, list: List<OfflineSong>) {
+        if (busy) return
         busy = true
         scope.launch {
-            withContext(Dispatchers.IO) { list.forEach { runCatching { OfflineStore.deleteSong(context, it) } } }
+            withContext(Dispatchers.IO) {
+                list.forEach { runCatching { OfflineStore.deleteSong(context, it) } }
+                if (name == null) OfflineCollections.deleteAll(context) else OfflineCollections.delete(context, name)
+            }
             val ids = list.map { it.id to it.uri }.toSet()
             songs = songs?.filterNot { (it.id to it.uri) in ids }
+            collectionNames = if (name == null) emptyList() else collectionNames - name
             busy = false
         }
     }
 
-    val groups = remember(songs) {
-        songs.orEmpty()
+    val groups = remember(songs, collectionNames) {
+        val bySong = songs.orEmpty()
             .groupBy { it.collection.ifBlank { it.album.ifBlank { "Single songs" } } }
-            .toList()
-            .sortedByDescending { it.second.size }
+        val emptyCollections = collectionNames.filter { it !in bySong }.map { it to emptyList<OfflineSong>() }
+        (bySong.toList().sortedByDescending { it.second.size }) + emptyCollections
     }
 
     AlertDialog(
@@ -111,12 +124,16 @@ fun DownloadsManagerDialog(onDismiss: () -> Unit) {
                                 Column(Modifier.weight(1f)) {
                                     Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                                     Text(
-                                        if (list.size == 1) "1 song" else "${list.size} songs",
+                                        when (list.size) {
+                                            0 -> "Nothing downloaded"
+                                            1 -> "1 song"
+                                            else -> "${list.size} songs"
+                                        },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                IconButton(onClick = { delete(list) }, enabled = !busy) {
+                                IconButton(onClick = { delete(name, list) }, enabled = !busy) {
                                     Icon(TablerIcons.Trash, contentDescription = "Remove $name", tint = MaterialTheme.colorScheme.error)
                                 }
                             }
@@ -129,10 +146,10 @@ fun DownloadsManagerDialog(onDismiss: () -> Unit) {
             TextButton(onClick = onDismiss) { Text("Done") }
         },
         dismissButton = {
-            if (!songs.isNullOrEmpty()) {
+            if (!songs.isNullOrEmpty() || collectionNames.isNotEmpty()) {
                 TextButton(
                     enabled = !busy,
-                    onClick = { if (confirmAll) { confirmAll = false; delete(songs.orEmpty()) } else confirmAll = true }
+                    onClick = { if (confirmAll) { confirmAll = false; delete(null, songs.orEmpty()) } else confirmAll = true }
                 ) {
                     Text(
                         if (confirmAll) "Tap again to remove all" else "Remove all",

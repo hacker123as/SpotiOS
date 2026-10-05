@@ -189,6 +189,8 @@ class MainActivity : ComponentActivity() {
     private val blockServiceWorkerState = mutableStateOf(true)
     private val webViewError = mutableStateOf<Pair<Int, String>?>(null)
     private var pendingLink: String? = null
+    /** A user script waiting for the installer: a .user.js link, a shared Greasy Fork page or a .js file. */
+    private val pendingScript = mutableStateOf<String?>(null)
 
     private lateinit var prefs: SharedPreferences
 
@@ -244,7 +246,11 @@ class MainActivity : ComponentActivity() {
         applyOrientation()
         applyKeepScreenOn()
 
-        pendingLink = extractSpotifyLink(intent)
+        pendingScript.value = com.project.lol.util.IncomingLinks.userScriptSource(intent)
+        pendingLink = if (pendingScript.value == null) extractSpotifyLink(intent) else null
+        if (pendingScript.value == null && pendingLink == null && intent?.action == Intent.ACTION_SEND) {
+            Toast.makeText(this, "SpotiOS opens Spotify links and user scripts", Toast.LENGTH_SHORT).show()
+        }
         if (pendingLink != null && !serviceEnabledState.value) {
             setServiceEnabled(true)
         }
@@ -300,6 +306,9 @@ class MainActivity : ComponentActivity() {
             }
 
             SpotifyTheme(useDynamicColor = materialYou, amoled = amoled, seedColor = seedColor) {
+                pendingScript.value?.let { src ->
+                    com.project.lol.ui.components.ScriptInstallDialog(src) { pendingScript.value = null }
+                }
                 if (showChangelog) {
                     ChangelogDialog(onDismiss = {
                         showChangelog = false
@@ -535,6 +544,9 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onWebViewError = { code, desc ->
                                                 webViewError.value = code to desc
+                                            },
+                                            onUserScriptLink = { url ->
+                                                runOnUiThread { pendingScript.value = url }
                                             }
                                         )
                                         webViewClient = spotifyClient
@@ -689,12 +701,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun extractSpotifyLink(intent: Intent?): String? {
-        val uri = intent?.data ?: return null
-        val host = uri.host ?: return null
-        val accepted = host == "spotify.link" || host.endsWith("spotify.com")
-        return if (accepted) uri.toString() else null
-    }
+    /** open.spotify.com links, spotify: URIs and Spotify links shared as text. */
+    private fun extractSpotifyLink(intent: Intent?): String? =
+        com.project.lol.util.IncomingLinks.spotifyUrl(intent)
 
     private fun setServiceEnabled(newValue: Boolean) {
         Logger.i(TAG, "service toggle: $newValue")
@@ -1495,7 +1504,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        com.project.lol.util.IncomingLinks.userScriptSource(intent)?.let {
+            Logger.i(TAG, "new intent: user script $it")
+            pendingScript.value = it
+            return
+        }
         val link = extractSpotifyLink(intent)
+        if (link == null && intent.action == Intent.ACTION_SEND) {
+            Toast.makeText(this, "SpotiOS opens Spotify links and user scripts", Toast.LENGTH_SHORT).show()
+            return
+        }
         Logger.i(TAG, "new intent received: link=${link ?: "none"}")
         if (link == null) {
             val loggedIn = prefs.getBoolean("LoggedIn", false)
@@ -1538,7 +1556,7 @@ class MainActivity : ComponentActivity() {
         val js = """
             (function() {
                 try {
-                    var target = '$path';
+                    var target = ${org.json.JSONObject.quote(path)};
                     if (window.location.pathname === target) return 'same';
                     window.history.pushState({}, '', target);
                     window.dispatchEvent(new PopStateEvent('popstate'));

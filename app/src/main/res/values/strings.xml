@@ -150,7 +150,8 @@
     <string name="settings_empty_cache_data_message">All cookies and login data will be deleted. On restart you will need to log in again. Continue?</string>
     <string name="settings_clear_all_data">Clear All Data</string>
     <string name="settings_open_links">Open Spotify Links</string>
-    <string name="settings_open_links_subtitle">Enable link handling to open shared links here</string>
+    <string name="settings_open_links_subtitle">Open Spotify links and spotify: links in SpotiOS. Turn on Open supported links, then add the Spotify links</string>
+    <string name="install_user_script">Install user script</string>
     <string name="settings_open_links_always_hint">Use \'Always\' when opening a Spotify link</string>
     <string name="settings_open_links_unsupported">Not supported on this device</string>
     <string name="settings_ca_certificate">CA Certificate</string>
