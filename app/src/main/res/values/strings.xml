@@ -53,6 +53,8 @@
     <string name="settings_color_green">Green</string>
     <string name="settings_color_blue">Blue</string>
     <string name="settings_apply">Apply</string>
+    <string name="settings_liquid_glass_theme">Liquid Glass Theme</string>
+    <string name="settings_liquid_glass_theme_subtitle">iOS 26 style frosted glass look (LilAmi Liquid OS 26)</string>
     <string name="settings_amoled_theme">AMOLED Theme</string>
     <string name="settings_amoled_theme_subtitle">Pure black background to save battery</string>
     <string name="settings_hide_top_bar">Hide Top Bar</string>

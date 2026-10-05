@@ -118,6 +118,7 @@ import com.project.lol.util.LogFilter
 import com.project.lol.util.LogLevel
 import com.project.lol.util.Logger
 import com.project.lol.util.MarkdownText
+import com.project.lol.webview.helpers.LiquidGlassTheme
 import com.project.lol.webview.helpers.LyricsTheme
 import compose.icons.TablerIcons
 import compose.icons.tablericons.AlertTriangle
@@ -143,6 +144,7 @@ import compose.icons.tablericons.Folder
 import compose.icons.tablericons.InfoCircle
 import compose.icons.tablericons.Language
 import compose.icons.tablericons.Link
+import compose.icons.tablericons.Droplet
 import compose.icons.tablericons.Moon
 import compose.icons.tablericons.Palette
 import compose.icons.tablericons.PlayerPlay
@@ -234,6 +236,7 @@ fun SettingsContent(
     var guiMode by remember { mutableStateOf(prefs.getString("GuiMode", "csshack") ?: "csshack") }
     var customCss by remember { mutableStateOf(prefs.getString("CustomCss", "") ?: "") }
     var amoledTheme by remember { mutableStateOf(amoledThemeState) }
+    var liquidGlassTheme by remember { mutableStateOf(prefs.getBoolean(LiquidGlassTheme.PREF_KEY, LiquidGlassTheme.DEFAULT_ENABLED)) }
     var swipeStop by remember { mutableStateOf(prefs.getBoolean("SwipeStop", true)) }
     var btAutoPause by remember { mutableStateOf(prefs.getBoolean("BtAutoPause", false)) }
     var btAutoResume by remember { mutableStateOf(prefs.getBoolean("BtAutoResume", false)) }
@@ -427,6 +430,19 @@ fun SettingsContent(
                         subtitle = accentLabel,
                         icon = TablerIcons.ColorSwatch,
                         onClick = { showPaletteDialog = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_liquid_glass_theme),
+                        subtitle = stringResource(R.string.settings_liquid_glass_theme_subtitle),
+                        icon = TablerIcons.Droplet,
+                        checked = liquidGlassTheme,
+                        onCheckedChange = { enabled ->
+                            liquidGlassTheme = enabled
+                            prefs.edit().putBoolean(LiquidGlassTheme.PREF_KEY, enabled).apply()
+                        }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))

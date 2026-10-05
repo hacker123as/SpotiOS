@@ -386,6 +386,7 @@ class SpotifyWebViewClient(
         val cleanJs = JsUtils.stripConsoleLogs(js) + "\n" +
                 buildAmoledJs(amoledEnabled) + "\n" +
                 AccentTheme.buildAccentJs(view.context) + "\n" +
+                LiquidGlassTheme.buildJs(view.context) + "\n" +
                 buildCustomCssJs(customCss) + "\n" +
                 LyricsTheme.buildLyricsStyleJs(lyricsStyle)
         if (playerMode == "original") {
@@ -429,6 +430,8 @@ class SpotifyWebViewClient(
                     wv.evaluateJavascript(js, null)
                     wv.evaluateJavascript(LyricsTheme.buildLyricsStyleJs(prefs.getString("LyricsStyle", LyricsTheme.DEFAULT_STYLE) ?: LyricsTheme.DEFAULT_STYLE), null)
                 }
+                LiquidGlassTheme.PREF_KEY ->
+                    wv.evaluateJavascript(LiquidGlassTheme.buildJs(wv.context), null)
                 "PaletteSeed", "MaterialYou" ->
                     wv.evaluateJavascript(AccentTheme.buildAccentJs(wv.context), null)
                 "TakeControl" -> {
