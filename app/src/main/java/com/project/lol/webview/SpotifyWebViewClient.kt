@@ -190,9 +190,9 @@ class SpotifyWebViewClient(
         return parts.joinToString("\n") { "try{\n$it\n}catch(e){}" }
     }
 
-    /** The name other Spotify devices see for this phone in Spotify Connect. */
-    private fun deviceName(prefs: android.content.SharedPreferences): String =
-        prefs.getString("SpoDeviceName", null)?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: "SpotiOS"
+    /** The name other Spotify devices see for this phone in Spotify Connect: always "SpotiOS" (3.0). */
+    @Suppress("UNUSED_PARAMETER")
+    private fun deviceName(prefs: android.content.SharedPreferences): String = "SpotiOS"
 
     private fun isWebPlayerUrl(url: String?): Boolean =
         url != null && (url == WEB_PLAYER_ORIGIN || url.startsWith("$WEB_PLAYER_ORIGIN/"))
@@ -477,12 +477,6 @@ class SpotifyWebViewClient(
                     wv.evaluateJavascript(AccentTheme.buildAccentJs(wv.context), null)
                 "SpoHidePods", "SpoSwipeSkip", "SpoDoubleTapLike", "SpoStats", "SpoShake" ->
                     wv.evaluateJavascript(spoExtrasJs(prefs, full = false), null)
-                "SpoDeviceName" -> {
-                    // Spotify reads the name when the player registers, so it shows on other
-                    // devices from the next launch; keep the early payload in step for that.
-                    wv.evaluateJavascript("window.__spoDeviceName=${org.json.JSONObject.quote(deviceName(prefs))};", null)
-                    installDocumentStartScripts(wv)
-                }
                 UserScripts.DEV_MODE_KEY, UserScripts.REV_KEY -> {
                     // New or re-enabled scripts start now; ones turned off stop at the next launch.
                     wv.evaluateJavascript("window.__spoDev=${UserScripts.devMode(wv.context)};", null)

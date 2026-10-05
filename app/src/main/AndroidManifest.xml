@@ -9,7 +9,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Sound controls (SoundFx): effects on the global output mix need it. Normal permission, no prompt. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Server Mode starts when the phone starts. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -19,6 +23,34 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
+    <!-- Android 11+ package visibility: the Spotify app (Open Spotify), and the ad blockers, VPN and
+         DNS filter apps NetCheck looks for when something blocks Spotify (keep in step with
+         NetCheckRules.BLOCKER_APPS). -->
+    <queries>
+        <package android:name="com.spotify.music" />
+        <package android:name="com.adguard.android" />
+        <package android:name="com.adguard.android.contentblocker" />
+        <package android:name="com.adguard.vpn" />
+        <package android:name="com.celzero.bravedns" />
+        <package android:name="eu.faircode.netguard" />
+        <package android:name="org.blokada.origin.alarm" />
+        <package android:name="org.blokada.sex" />
+        <package android:name="org.blokada.fem.fdroid" />
+        <package android:name="org.blokada.alarm" />
+        <package android:name="org.blokada.family" />
+        <package android:name="org.adaway" />
+        <package android:name="org.jak_linux.dns66" />
+        <package android:name="com.frostnerd.smokescreen" />
+        <package android:name="dnsfilter.android" />
+        <package android:name="com.cloudflare.onedotonedotone" />
+        <package android:name="net.kollnig.missioncontrol" />
+        <package android:name="net.kollnig.missioncontrol.fdroid" />
+        <!-- SpotifyBridge.openPrivateDnsSettings: used where a phone's Settings has this screen. -->
+        <intent>
+            <action android:name="android.settings.PRIVATE_DNS_SETTINGS" />
+        </intent>
+    </queries>
 
     <application
         android:name=".SpotilolApp"
@@ -182,6 +214,17 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Brings Server Mode back when the phone starts. Exported for QUICKBOOT_POWERON,
+             which some phones send from a non-system app. -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

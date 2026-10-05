@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -31,13 +32,24 @@ object ServerMode {
     const val KEY_WITH_SPOTIFY = "SpoServerWithSpotify"
     /** Set once the user picked Server or Normal (welcome screen, or once after updating). */
     const val KEY_MODE_ASKED = "ModeAsked"
-    /** Set by Stop server: the server stays off until SpotiOS is opened again. */
+    /** Set by Stop server: the server stays off until SpotiOS is opened again (or the phone restarts, see onBoot). */
     const val KEY_STOPPED = "SpoServerStopped"
+    /** Start the server when the phone starts (see BootReceiver). On unless turned off. */
+    const val KEY_ON_BOOT = "SpoServerOnBoot"
     const val SPOTIFY_PACKAGE = "com.spotify.music"
 
     private const val PREFS = "spotilol_prefs"
     private const val NOTICE_CHANNEL = "spotios_server_notice"
     private const val NOTICE_ID = 7
+
+    /**
+     * Android 15+ refuses a mediaPlayback foreground service started under the allowance an app
+     * gets right after BOOT_COMPLETED (about 20 s). Starts asked for in that time go to
+     * ServerBootWorker, which runs once it is over.
+     */
+    private const val BOOT_ALLOWANCE_MS = 30_000L
+    /** elapsedRealtime when BootReceiver ran in this process, 0 if it hasn't. */
+    @Volatile private var bootSeenAt = 0L
 
     /** Whether the server should be running: Server Mode is on and it wasn't stopped. */
     fun isOn(context: Context): Boolean {
@@ -61,7 +73,8 @@ object ServerMode {
     /**
      * Stop server (Server screen or notification): leaves Spotify Connect, closes SpotiOS and
      * stops the background service. Nothing starts it again (watchdog, Start with Spotify,
-     * updates) until SpotiOS is opened, which is how it starts again.
+     * updates) until SpotiOS is opened, which is how it starts again, or the phone restarts
+     * with Start on boot on.
      */
     fun stop(context: Context, reason: String) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -92,6 +105,43 @@ object ServerMode {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_WITH_SPOTIFY, on).apply()
     }
 
+    fun startOnBoot(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ON_BOOT, true)
+
+    fun setStartOnBoot(context: Context, on: Boolean) {
+        Logger.i(TAG, "start on boot -> $on")
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ON_BOOT, on).apply()
+    }
+
+    /**
+     * The phone just started (BootReceiver). With Server Mode and Start on boot on, the server
+     * comes back even if it was stopped before the restart. Android 15+ doesn't let a
+     * BOOT_COMPLETED receiver start a mediaPlayback foreground service, so ServerBootWorker
+     * starts it a little later; older versions start it right away and keep the worker as a
+     * second try.
+     */
+    fun onBoot(context: Context) {
+        bootSeenAt = SystemClock.elapsedRealtime()
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!p.getBoolean(KEY, false)) return
+        if (!startOnBoot(context)) {
+            Logger.i(TAG, "phone started, start on boot is off")
+            return
+        }
+        Logger.i(TAG, "phone started, bringing the server back")
+        p.edit().putBoolean(KEY_STOPPED, false).commit()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) startInBackground(context, "boot")
+        ServerWatchdog.schedule(context)
+        ServerBootWorker.enqueue(context, "boot", replace = true)
+    }
+
+    /** Whether this process is still inside Android 15's BOOT_COMPLETED allowance (see [BOOT_ALLOWANCE_MS]). */
+    private fun inBootAllowance(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return false
+        val seen = bootSeenAt
+        return seen > 0 && SystemClock.elapsedRealtime() - seen < BOOT_ALLOWANCE_MS
+    }
+
     fun hasNotificationAccess(context: Context): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
 
@@ -115,8 +165,9 @@ object ServerMode {
      * Starts the server without opening SpotiOS (Spotify just opened, or the server was asked
      * to start from a notification). Android only lets an app start this from the background
      * when battery optimization is off for it; otherwise a "Tap to start" notification is shown.
+     * [deferDuringBoot] false is for ServerBootWorker itself, which only runs after the boot allowance.
      */
-    fun startInBackground(context: Context, reason: String) {
+    fun startInBackground(context: Context, reason: String, deferDuringBoot: Boolean = true) {
         if (!isOn(context)) return
         val running = MediaNotificationService.instance
         if (running != null) {
@@ -129,6 +180,12 @@ object ServerMode {
             showNotice(context, context.getString(R.string.server_notice_signin))
             return
         }
+        if (deferDuringBoot && inBootAllowance()) {
+            // Android would let the service start, then refuse its startForeground(mediaPlayback).
+            Logger.i(TAG, "phone just started, $reason start handed to the boot worker")
+            ServerBootWorker.enqueue(context, reason)
+            return
+        }
         try {
             ContextCompat.startForegroundService(
                 context,
@@ -138,7 +195,11 @@ object ServerMode {
         } catch (e: Exception) {
             // ForegroundServiceStartNotAllowedException when battery optimization is on.
             Logger.w(TAG, "background start blocked ($reason): ${e.javaClass.simpleName}")
-            showNotice(context, context.getString(R.string.server_notice_tap_to_start))
+            showNotice(context, context.getString(when (reason) {
+                "spotify" -> R.string.server_notice_tap_to_start
+                "boot" -> R.string.server_notice_tap_to_start_boot
+                else -> R.string.server_notice_tap_to_start_again
+            }))
         }
     }
 
@@ -167,12 +228,28 @@ object ServerMode {
         runCatching { context.getSystemService(NotificationManager::class.java)?.cancel(NOTICE_ID) }
     }
 
+    /**
+     * What tapping SpotiOS's music notification opens in Server Mode: the Spotify app on the song
+     * SpotiOS is playing (or just Spotify), never the store. Null when Spotify isn't installed.
+     */
+    fun spotifyIntent(context: Context, uri: String?): Intent? {
+        val pm = context.packageManager
+        if (!uri.isNullOrBlank() && uri.startsWith("spotify:")) {
+            val view = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri)).setPackage(SPOTIFY_PACKAGE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (runCatching { view.resolveActivity(pm) }.getOrNull() != null) return view
+        }
+        return runCatching { pm.getLaunchIntentForPackage(SPOTIFY_PACKAGE) }.getOrNull()
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
     /** Server Mode settings and phone facts for the Server screen in the page. */
     fun statusJson(context: Context): String {
         val o = JSONObject()
         o.put("on", isOn(context))
         o.put("battery", isIgnoringBatteryOptimizations(context))
         o.put("withSpotify", startWithSpotify(context))
+        o.put("onBoot", startOnBoot(context))
         o.put("notifAccess", hasNotificationAccess(context))
         o.put("spotifyInstalled", runCatching { context.packageManager.getPackageInfo(SPOTIFY_PACKAGE, 0); true }.getOrDefault(false))
         o.put("model", Build.MODEL ?: "")

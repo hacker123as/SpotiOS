@@ -247,27 +247,20 @@ private fun WelcomePage(onNext: () -> Unit) {
     )
 }
 
-/** Normal app, or SpotiOS Server Mode (a Spotify Connect speaker that runs in the background). */
+/** SpotiOS Server Mode (recommended, the default since 3.0), or the normal app. */
 @Composable
 private fun ModePage(onPick: (server: Boolean) -> Unit) {
-    var server by remember { mutableStateOf(false) }
+    var server by remember { mutableStateOf(true) }
     Page(
         hero = { HeroIcon(if (server) TablerIcons.Cast else TablerIcons.DeviceMobile) },
         title = stringResource(R.string.onb_mode_title),
         subtitle = stringResource(R.string.onb_mode_subtitle),
         content = {
             ModeCard(
-                selected = !server,
-                icon = TablerIcons.DeviceMobile,
-                title = stringResource(R.string.onb_mode_normal_title),
-                desc = stringResource(R.string.onb_mode_normal_desc),
-                points = emptyList()
-            ) { server = false }
-            Spacer(Modifier.height(12.dp))
-            ModeCard(
                 selected = server,
                 icon = TablerIcons.Cast,
                 title = stringResource(R.string.onb_mode_server_title),
+                badge = stringResource(R.string.onb_mode_recommended),
                 desc = stringResource(R.string.onb_mode_server_desc),
                 points = listOf(
                     stringResource(R.string.onb_mode_server_point1),
@@ -275,13 +268,21 @@ private fun ModePage(onPick: (server: Boolean) -> Unit) {
                     stringResource(R.string.onb_mode_server_point3)
                 )
             ) { server = true }
+            Spacer(Modifier.height(12.dp))
+            ModeCard(
+                selected = !server,
+                icon = TablerIcons.DeviceMobile,
+                title = stringResource(R.string.onb_mode_normal_title),
+                desc = stringResource(R.string.onb_mode_normal_desc),
+                points = emptyList()
+            ) { server = false }
         },
         actions = { PrimaryButton(stringResource(R.string.onb_continue)) { onPick(server) } }
     )
 }
 
 @Composable
-private fun ModeCard(selected: Boolean, icon: ImageVector, title: String, desc: String, points: List<String>, onClick: () -> Unit) {
+private fun ModeCard(selected: Boolean, icon: ImageVector, title: String, desc: String, points: List<String>, badge: String? = null, onClick: () -> Unit) {
     val rim by animateColorAsState(if (selected) Green else GlassRim, tween(220), label = "rim")
     val fill by animateColorAsState(if (selected) Green.copy(alpha = 0.10f) else GlassFill, tween(220), label = "fill")
     Row(
@@ -300,7 +301,16 @@ private fun ModeCard(selected: Boolean, icon: ImageVector, title: String, desc: 
         ) { Icon(icon, contentDescription = null, tint = Green, modifier = Modifier.size(21.dp)) }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (badge != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        badge.uppercase(), color = Green, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.3.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Green.copy(alpha = 0.16f)).padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(3.dp))
             Text(desc, color = Ink2, fontSize = 13.sp, lineHeight = 18.sp)
             points.forEach { p ->

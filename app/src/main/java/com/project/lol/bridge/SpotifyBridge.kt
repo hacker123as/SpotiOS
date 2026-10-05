@@ -114,12 +114,33 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         }
     }
 
+    /** Sound controls on the Server screen: settings plus what this phone supports (see SoundFx.stateJson). */
+    @JavascriptInterface
+    fun soundFx(): String {
+        val ctx = appContext() ?: return "{}"
+        return com.project.lol.service.SoundFx.stateJson(ctx)
+    }
+
+    /** Saves sound settings from the Server screen (any of on/boost/bass/treble/surround) and applies them. */
+    @JavascriptInterface
+    fun setSoundFx(json: String) {
+        val ctx = appContext() ?: return
+        com.project.lol.service.SoundFx.set(ctx, json)
+    }
+
     @JavascriptInterface
     fun setStartWithSpotify(on: Boolean) {
         val ctx = appContext() ?: return
         ServerMode.setStartWithSpotify(ctx, on)
         // Ask for notification access the first time it's needed.
         if (on && !ServerMode.hasNotificationAccess(ctx)) openNotificationAccess()
+    }
+
+    /** Server screen > Start on boot (status JSON key "onBoot"). */
+    @JavascriptInterface
+    fun setStartOnBoot(on: Boolean) {
+        val ctx = appContext() ?: return
+        ServerMode.setStartOnBoot(ctx, on)
     }
 
     @JavascriptInterface
@@ -324,6 +345,13 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         activity.runOnUiThread { onOpenSettingsRequest?.invoke() }
     }
 
+    /** Where the music plays right now, for the Server screen: `{"name":"Phone speaker","kind":"speaker"}`. */
+    @JavascriptInterface
+    fun audioOutput(): String {
+        val ctx = appContext() ?: return "{}"
+        return runCatching { com.project.lol.util.AudioOutput.currentJson(ctx) }.getOrDefault("{}")
+    }
+
     /** System audio output picker (phone speaker, Bluetooth, wired, cast). */
     @JavascriptInterface
     fun openAudioOutput() {
@@ -349,6 +377,61 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
             }
         }
     }
+
+    /** Is a VPN, Private DNS or ad blocker keeping the server from Spotify? JSON, see NetCheck.snapshot. Never waits. */
+    @JavascriptInterface
+    fun netCheck(force: Boolean): String {
+        val ctx = appContext() ?: return "{}"
+        return com.project.lol.util.NetCheck.snapshot(ctx, force)
+    }
+
+    @JavascriptInterface
+    fun openVpnSettings() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            startFirst(
+                activity,
+                android.content.Intent(android.provider.Settings.ACTION_VPN_SETTINGS),
+                android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS),
+                android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+            )
+        }
+    }
+
+    /** Android has no public Private DNS screen; "Network & internet" holds the setting. */
+    @JavascriptInterface
+    fun openPrivateDnsSettings() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            // Only a screen of the system's own Settings, not some other app claiming the action.
+            val privateDns = android.content.Intent("android.settings.PRIVATE_DNS_SETTINGS").takeIf {
+                val app = runCatching { activity.packageManager.resolveActivity(it, 0) }.getOrNull()?.activityInfo?.applicationInfo
+                app != null && (app.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+            }
+            startFirst(
+                activity,
+                *listOfNotNull(
+                    privateDns,
+                    android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS),
+                    android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+                ).toTypedArray()
+            )
+        }
+    }
+
+    /** Opens the blocker app named in netCheck's "blockers" (e.g. "AdGuard"), else VPN settings. */
+    @JavascriptInterface
+    fun openBlockerApp(name: String) {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            val intent = com.project.lol.util.NetCheck.blockerIntent(activity, name)
+            if (intent == null || runCatching { activity.startActivity(intent) }.isFailure) openVpnSettings()
+        }
+    }
+
+    /** Starts the first of [intents] that opens; true when one did. */
+    private fun startFirst(activity: Activity, vararg intents: android.content.Intent): Boolean =
+        intents.any { runCatching { activity.startActivity(it) }.isSuccess }
 
     @JavascriptInterface
     fun openDevScripts() {

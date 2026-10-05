@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Server Mode: a VPN, Private DNS or ad blocker is keeping SpotiOS from Spotify (util/NetCheck) -->
+    <!-- %1$s: the blocker app's name, e.g. AdGuard -->
+    <string name="netcheck_problem_app">%1$s is blocking Spotify. Open SpotiOS to fix it.</string>
+    <string name="netcheck_problem_private_dns">Private DNS is blocking Spotify. Open SpotiOS to fix it.</string>
+    <string name="netcheck_problem_generic">A VPN or ad blocker is blocking Spotify. Open SpotiOS to fix it.</string>
+</resources>

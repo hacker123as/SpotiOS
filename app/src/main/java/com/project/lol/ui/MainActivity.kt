@@ -116,6 +116,7 @@ import com.project.lol.ui.components.ChangelogDialog
 import com.project.lol.ui.components.SettingsDialog
 import com.project.lol.ui.components.UpdatePrompt
 import com.project.lol.ui.theme.SpotifyTheme
+import com.project.lol.update.UpdateCheckWorker
 import com.project.lol.update.UpdateManager
 import com.project.lol.util.BuildInfo
 import com.project.lol.util.ChangelogPrefs
@@ -228,7 +229,13 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
             WebView.setWebContentsDebuggingEnabled(true)
         }
 
-        UpdateChecker(this).autoCheck { update -> UpdateManager.offer(update) }
+        // Tapped "SpotiOS X is ready": check right away; otherwise the throttled check.
+        if (savedInstanceState == null && takeUpdateExtra(intent)) {
+            checkForUpdateNow()
+        } else {
+            UpdateChecker(this).autoCheck { update -> UpdateManager.offer(update) }
+        }
+        UpdateCheckWorker.schedule(this)
 
         val loggedIn = prefs.getBoolean("LoggedIn", false)
 
@@ -1463,8 +1470,36 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
         }
     }
 
+    /** Whether [intent] came from the "SpotiOS X is ready" notification; clears the flag. */
+    private fun takeUpdateExtra(intent: Intent?): Boolean {
+        if (intent?.getBooleanExtra(UpdateCheckWorker.EXTRA_CHECK_UPDATE, false) != true) return false
+        intent.removeExtra(UpdateCheckWorker.EXTRA_CHECK_UPDATE)
+        return true
+    }
+
+    /** Asks GitHub now and shows the update card, or says why it can't. */
+    private fun checkForUpdateNow() {
+        Logger.i(TAG, "opened from the update notification")
+        UpdateChecker(this).checkNow { result ->
+            val message = when (result) {
+                is UpdateChecker.Result.Available -> {
+                    UpdateManager.show(result.update)
+                    return@checkNow
+                }
+                UpdateChecker.Result.UpToDate -> R.string.update_up_to_date
+                UpdateChecker.Result.RateLimited -> R.string.update_rate_limited
+                UpdateChecker.Result.Failed -> R.string.update_check_failed
+            }
+            if (!isFinishing) Toast.makeText(this, getString(message), Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (takeUpdateExtra(intent)) {
+            checkForUpdateNow()
+            return
+        }
         com.project.lol.util.IncomingLinks.userScriptSource(intent)?.let {
             Logger.i(TAG, "new intent: user script $it")
             pendingScript.value = it

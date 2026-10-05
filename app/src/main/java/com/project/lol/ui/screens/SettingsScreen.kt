@@ -276,7 +276,6 @@ fun SettingsContent(
     var scriptsSummary by remember { mutableStateOf(com.project.lol.webview.helpers.UserScripts.load(context)) }
     var showInstallLink by remember { mutableStateOf(false) }
     var installSource by remember { mutableStateOf<String?>(null) }
-    var showDeviceName by remember { mutableStateOf(false) }
     var serverOn by remember { mutableStateOf(com.project.lol.service.ServerMode.isOn(context)) }
     var serverWithSpotify by remember { mutableStateOf(com.project.lol.service.ServerMode.startWithSpotify(context)) }
     var notifAccess by remember { mutableStateOf(com.project.lol.service.ServerMode.hasNotificationAccess(context)) }
@@ -285,7 +284,6 @@ fun SettingsContent(
         notifAccess = com.project.lol.service.ServerMode.hasNotificationAccess(context)
         onPauseOrDispose { }
     }
-    var deviceName by remember { mutableStateOf(prefs.getString("SpoDeviceName", null)?.takeIf { it.isNotBlank() } ?: "SpotiOS") }
     var showSaveAccountDialog by remember { mutableStateOf(false) }
     var pendingCookies by remember { mutableStateOf<String?>(null) }
     var accountNameInput by remember { mutableStateOf("") }
@@ -811,15 +809,6 @@ fun SettingsContent(
                             takeControl = it
                             prefs.edit().putBoolean("TakeControl", it).apply()
                         }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-
-                    SettingTile(
-                        title = "Device name",
-                        subtitle = "Your other devices see this phone as \u201c$deviceName\u201d in Spotify Connect",
-                        icon = TablerIcons.DeviceMobile,
-                        onClick = { showDeviceName = true }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
@@ -1379,38 +1368,6 @@ fun SettingsContent(
             devMode = com.project.lol.webview.helpers.UserScripts.devMode(context)
             scriptsSummary = com.project.lol.webview.helpers.UserScripts.load(context)
         }
-    }
-
-    if (showDeviceName) {
-        var name by remember { mutableStateOf(deviceName) }
-        AlertDialog(
-            onDismissRequest = { showDeviceName = false },
-            shape = RoundedCornerShape(28.dp),
-            title = { Text("Device name", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = name, onValueChange = { name = it.take(40) },
-                        label = { Text("Name in Spotify Connect") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "This is what your laptop, TV and other phones show when you pick where to play. It updates the next time SpotiOS opens.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val clean = name.trim().ifEmpty { "SpotiOS" }
-                    deviceName = clean
-                    prefs.edit().putString("SpoDeviceName", clean).apply()
-                    showDeviceName = false
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { showDeviceName = false }) { Text(stringResource(R.string.settings_cancel)) } }
-        )
     }
 
     if (showDownloadsManager) {

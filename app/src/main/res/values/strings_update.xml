@@ -37,4 +37,9 @@
     <string name="update_channel">App updates</string>
     <string name="update_done_title">SpotiOS %1$s is installed</string>
     <string name="update_done_text">Tap to open SpotiOS</string>
+
+    <!-- Background check (UpdateCheckWorker) -->
+    <string name="update_ready_channel">New versions</string>
+    <string name="update_ready_title">SpotiOS %1$s is ready</string>
+    <string name="update_ready_text">Tap to update</string>
 </resources>

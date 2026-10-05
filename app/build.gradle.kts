@@ -25,8 +25,8 @@ android {
         applicationId = "com.spotios.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2120
-        versionName = "2.12.0"
+        versionCode = 3001
+        versionName = "3.0.1"
         buildConfigField("int", "CI_BUILD", ciBuild.toString())
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

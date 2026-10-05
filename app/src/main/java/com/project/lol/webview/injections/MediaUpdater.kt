@@ -4,10 +4,11 @@ object MediaUpdater {
     const val CONTENT = """
             window.updMedia = function(){
                 var album=window.__curTrackAlbum||'';
-                var currState=track+'|'+artist+'|'+playing+'|'+repmode+'|'+isfav+'|'+shuffle+'|'+album;
+                var uri=window.splTrackUri||'';
+                var currState=track+'|'+artist+'|'+playing+'|'+repmode+'|'+isfav+'|'+shuffle+'|'+album+'|'+uri;
                 if(currState!==lastState) {
                     lastState=currState;
-                    var values={artist:artist,track:track,album:album,playing:playing,repeat:repmode,fav:isfav,shuffle:shuffle,duration:duration,position:position,cover:cover};
+                    var values={artist:artist,track:track,album:album,playing:playing,repeat:repmode,fav:isfav,shuffle:shuffle,duration:duration,position:position,cover:cover,uri:uri};
                     AndBridge.recMediaStatus(JSON.stringify(values));
                 } else {
                     AndBridge.recMediaPosition(position);

@@ -9,6 +9,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.project.lol.BuildConfig
 import com.project.lol.R
+import com.project.lol.service.ServerBootWorker
 import com.project.lol.service.ServerMode
 import com.project.lol.util.Logger
 
@@ -25,8 +26,13 @@ class PackageReplacedReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         Logger.s(TAG, "updated to ${BuildConfig.VERSION_NAME} (build ${BuildConfig.CI_BUILD})")
         ApkDownloader.clear(context)
-        // Installing closed SpotiOS: bring the server back by itself.
-        if (ServerMode.isOn(context)) ServerMode.startInBackground(context, "updated")
+        UpdateCheckWorker.cancelNotice(context)
+        // Installing closed SpotiOS: bring the server back by itself, with a second try in a
+        // moment in case Android refused this one.
+        if (ServerMode.isOn(context)) {
+            ServerMode.startInBackground(context, "updated")
+            ServerBootWorker.enqueue(context, "updated")
+        }
         UpdateManager.takeInstalledVersion(context)?.let { showUpdated(context) }
     }
 

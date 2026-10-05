@@ -6,6 +6,8 @@
     <string name="server_notice_channel">SpotiOS Server alerts</string>
     <string name="server_notice_signin">Open SpotiOS and sign in so the server can start.</string>
     <string name="server_notice_tap_to_start">Spotify is open. Tap to start SpotiOS Server so you can play on it.</string>
+    <string name="server_notice_tap_to_start_boot">Your phone restarted. Tap to start SpotiOS Server so it’s ready on Spotify Connect.</string>
+    <string name="server_notice_tap_to_start_again">SpotiOS Server stopped. Tap to start it again.</string>
     <string name="server_notif_subtext">Server mode</string>
     <string name="server_notif_live">Live</string>
     <string name="server_notif_ready">Ready on Spotify Connect as “%1$s”</string>
@@ -25,7 +27,8 @@
     <string name="onb_mode_server_title">Server mode</string>
     <string name="onb_mode_server_desc">SpotiOS runs in the background as a speaker on Spotify Connect. Open your normal Spotify app, pick “SpotiOS” from the devices list and play through it.</string>
     <string name="onb_mode_server_point1">Keeps running when you swipe it away or lock the phone</string>
-    <string name="onb_mode_server_point2">Takes the music over when Spotify starts playing on another device</string>
+    <string name="onb_mode_server_point2">Takes the music over the moment your phone’s Spotify app plays</string>
+    <string name="onb_mode_recommended">Recommended</string>
     <string name="onb_mode_server_point3">Shows what’s playing, and you can still pick songs</string>
     <string name="onb_continue">Continue</string>
 

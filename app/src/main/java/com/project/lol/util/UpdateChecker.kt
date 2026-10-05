@@ -17,7 +17,7 @@ class UpdateChecker(context: Context) {
         private const val KEY_LAST_CHECK = "LastUpdateCheck"
         private const val KEY_LATER_TAG = "UpdateLaterTag"
         private const val KEY_LATER_UNTIL = "UpdateLaterUntil"
-        private const val CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000L
+        private const val CHECK_INTERVAL_MS = 30 * 60 * 1000L
         private const val LATER_MS = 24 * 60 * 60 * 1000L
     }
 
@@ -30,7 +30,7 @@ class UpdateChecker(context: Context) {
 
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** At app start: at most every 6 hours, silent on errors, and skips a release put off with Later. */
+    /** At app start: at most every 30 minutes, silent on errors, and skips a release put off with Later. */
     fun autoCheck(onUpdateAvailable: (AppUpdate) -> Unit) {
         val since = System.currentTimeMillis() - prefs.getLong(KEY_LAST_CHECK, 0)
         if (since in 0 until CHECK_INTERVAL_MS) {
@@ -59,30 +59,44 @@ class UpdateChecker(context: Context) {
             .apply()
     }
 
-    private fun isPutOff(update: AppUpdate): Boolean =
+    fun isPutOff(update: AppUpdate): Boolean =
         prefs.getString(KEY_LATER_TAG, null) == update.tag &&
             System.currentTimeMillis() < prefs.getLong(KEY_LATER_UNTIL, 0)
+
+    /**
+     * The background check (UpdateCheckWorker): blocking, and it leaves the app-start throttle
+     * alone so opening SpotiOS still shows the update card.
+     */
+    fun checkBlocking(): Result {
+        Logger.i(TAG, "background update check ($OWNER/$REPO)")
+        return toResult(GitHubApi.latestRelease(OWNER, REPO))
+    }
 
     private fun check(onResult: (Result) -> Unit) {
         Logger.i(TAG, "checking for updates ($OWNER/$REPO)")
         GitHubApi.fetchLatestReleaseResult(OWNER, REPO) { response ->
-            val result = when (response) {
-                is ReleaseResult.Found -> evaluate(response.release)
-                ReleaseResult.RateLimited -> Result.RateLimited
-                is ReleaseResult.Failed -> Result.Failed
-            }
+            val result = toResult(response)
             // Only an unreachable GitHub is retried on the next start.
             if (response !is ReleaseResult.Failed || response.code > 0) {
                 prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
             }
-            when (result) {
-                is Result.Available -> Logger.s(TAG, "update available: ${result.update.tag}")
-                Result.RateLimited -> Logger.w(TAG, "GitHub rate limit hit, will try again later")
-                Result.Failed -> Logger.w(TAG, "update check failed ($response)")
-                Result.UpToDate -> Unit
-            }
             onResult(result)
         }
+    }
+
+    private fun toResult(response: ReleaseResult): Result {
+        val result = when (response) {
+            is ReleaseResult.Found -> evaluate(response.release)
+            ReleaseResult.RateLimited -> Result.RateLimited
+            is ReleaseResult.Failed -> Result.Failed
+        }
+        when (result) {
+            is Result.Available -> Logger.s(TAG, "update available: ${result.update.tag}")
+            Result.RateLimited -> Logger.w(TAG, "GitHub rate limit hit, will try again later")
+            Result.Failed -> Logger.w(TAG, "update check failed ($response)")
+            Result.UpToDate -> Unit
+        }
+        return result
     }
 
     private fun evaluate(release: GitHubRelease): Result {

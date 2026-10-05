@@ -45,7 +45,8 @@ It needs Android 9 or newer.
 ## Updates
 
 SpotiOS checks [GitHub Releases](https://github.com/hacker123as/SpotiOS/releases) for a new version when it opens
-(at most every 6 hours). You can also check any time in **Settings → About → Check for updates**.
+(at most every 30 minutes), and every few hours in the background: when there's one, a "SpotiOS is ready" notification
+takes you straight to the update. You can also check any time in **Settings → About → Check for updates**.
 
 - When there's an update, a card shows what's new with **Update** and **Later**. Later hides that version for a day.
 - **Update** downloads the new version and installs it over the one you have, so your login, settings and downloads
@@ -62,8 +63,9 @@ After that, updates install with one tap. Get SpotiOS from Releases so updates k
 The first launch walks you through four short screens:
 
 1. **Welcome**: a quick look at what SpotiOS does.
-2. **Normal or Server mode**: **Normal** is the full app. **Server mode** turns SpotiOS into a speaker for your
-   normal Spotify app, see [SpotiOS Server Mode](#spotios-server-mode). You can switch later in Settings.
+2. **Server or Normal mode**: **Server mode** (recommended, picked for you) turns SpotiOS into a speaker for your
+   normal Spotify app, see [SpotiOS Server Mode](#spotios-server-mode). **Normal** is the full app. You can switch
+   later in Settings.
 3. **Permissions**: notifications (for lock screen and notification controls) and nearby devices
    (for Bluetooth and Spotify Connect). You can skip this and allow them later in Android settings.
 4. **Keep playing in the background**: tap **Turn off battery optimization**, then **Allow**.
@@ -152,23 +154,33 @@ SpotiOS.
   and whether it's connected; it stays in the notification shade even when nothing has played for a long time, with
   **Resume** for the last song. If Android ever stops SpotiOS, it starts again within 15 minutes (with battery
   optimization off).
+- **Never stops**: with **Start when the phone starts** (on by default) the server comes back by itself after a
+  restart, and after updates.
 - **Stop server**: the power button at the top of the Server screen (also in **⋯** and in the notification) leaves
-  Spotify Connect and closes SpotiOS. Nothing starts it again, not even Start with Spotify, until you open SpotiOS.
+  Spotify Connect and closes SpotiOS. Nothing starts it again, not even Start with Spotify, until you open SpotiOS or
+  restart the phone.
+- **Always called SpotiOS**: the name in Spotify's devices list is SpotiOS and can't be changed.
 - **It stays connected.** SpotiOS checks its link to Spotify every 20 seconds, checks that Spotify still lists it, and
   reconnects on its own after a network change or a dropped connection, so it doesn't vanish from the devices list.
 - **The Server screen** replaces the full web player after you log in. It shows what's playing, with play, pause and skip,
-  and your recents, playlists and liked songs, with search. Tap one to play it on SpotiOS. It uses the same Spotify
+  a **Sound** button (volume boost, bass boost, treble and surround), a **Download** button for the song, which audio
+  output it's playing on (tap it to switch between the phone speaker, Bluetooth and headphones), and your recents,
+  playlists and liked songs, with search (fold that card away with its title). Tap one to play it on SpotiOS. It uses the same Spotify
   service the web player itself uses. If Spotify is busy anyway, lists and play buttons try again by themselves, and
   your lists are kept, so they show at once next time.
-- **Getting around**: the **⋯** button at the top right has **Browse Spotify** (the whole web player), **Play on another
-  device**, **SpotiOS settings**, **Switch to Normal mode** and **Stop server**. While you browse, the **Server** tab at the left of the
+- **Getting around**: the **⋯** button at the top right has **Spotify player mode** (the whole web player, to browse),
+  **Play on another device**, **Audio output**, **Sound**, **SpotiOS settings** and **Stop server**. While you browse, the **Server** tab at the left of the
   tab bar (or the back button) takes you back to the Server screen.
 - **How to connect** is on the Server screen, with a button that opens the Spotify app.
-- **Take over**: when Spotify starts playing on another device (open Spotify on your phone and press play), SpotiOS
-  moves the music to itself within a second or two. It works from **any device**, or only **one device** you pick. To
-  play somewhere else, pick the device under **Play on** on the Server screen: SpotiOS leaves the music there until
-  that device stops. A device that takes the music straight back twice is left alone the same way, and devices that
-  aren't allowed to play on SpotiOS are never taken over from.
+- **Take over the default device**: your default device is this phone's own Spotify app (SpotiOS finds it by its
+  name, or you pick it on the Server screen). Whenever it plays, SpotiOS takes the music over right away, every time,
+  so Spotify never keeps playing there. If the Spotify session drops while SpotiOS is playing, SpotiOS takes it back.
+  Other devices (a computer, a speaker, a TV) are never taken over from.
+- **Pause when Spotify closes**: when you close the Spotify app on this phone, SpotiOS pauses (needs notification
+  access).
+- **Tap the notification** to open the Spotify app on the song SpotiOS is playing.
+- **AdGuard, VPNs and Private DNS**: if one of them blocks Spotify, the Server screen and the notification say which
+  one and how to turn it off.
 - **Who can play**: allow every device, or only the ones you pick. A device that isn't allowed gets its music sent back.
 - **Start with Spotify**: SpotiOS starts the server when the Spotify app plays on this phone. This needs notification
   access (SpotiOS only looks at Spotify's notifications) and battery optimization turned off for SpotiOS. Without that,
@@ -242,6 +254,8 @@ Each script runs in its own `try/catch`, so a broken script can't break the app.
 | Spotify shows "Something went wrong" | SpotiOS recovers on its own. If it keeps happening, restart the app. |
 | No sound | Open **Play on** in Now Playing and pick **This phone**. Another device may have taken over playback. |
 | SpotiOS isn't in Spotify's devices list | Open SpotiOS once so it can sign in, and check the Server notification says it's ready. If it still isn't listed, tap **Reconnect now** on the Server screen. On the same Wi-Fi isn't needed: any device signed in to the same Spotify account sees it. |
+| The Server screen says AdGuard, a VPN or Private DNS is blocking Spotify | Pause the app it names (or add SpotiOS and Spotify to its allowlist), or set Private DNS to Automatic, then tap **Check again**. |
+| Spotify app shows ads | SpotiOS can't change the official Spotify app. Play through SpotiOS (it has no ads), or use Spotify Premium. |
 | Server mode stops after a while | Turn off battery optimization for SpotiOS, and on phones that close swiped-away apps, lock SpotiOS in recent apps. |
 | No lock screen controls | Allow notifications for SpotiOS in Android settings. |
 | A song won't download | Try again later, or tap skip on the download progress pill to move on. |

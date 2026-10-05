@@ -136,6 +136,9 @@ object UpdateManager {
         try {
             // commit(), not apply(): Android may stop SpotiOS right after the session is committed.
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_INSTALLING, update.versionName).commit()
+            // Same reason: WebView writes cookies to disk only every few seconds, so save the
+            // Spotify login now or a cookie changed just before the update could be lost.
+            runCatching { android.webkit.CookieManager.getInstance().flush() }
             ApkInstaller.install(context, apk)
         } catch (e: Exception) {
             Logger.e(TAG, "install session failed", e)

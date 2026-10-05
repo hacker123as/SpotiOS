@@ -216,6 +216,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     private var currentTitle = ""
     private var currentArtist = ""
     private var currentAlbum = ""
+    private var currentUri = ""
+    private var sessionActivityKey = ""
     private var currentPosition: Long = 0L
     private var currentDuration: Long = 0L
     private var lastCoverUrl = ""
@@ -454,6 +456,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             .registerOnSharedPreferenceChangeListener(prefsListener)
         PlayerHost.headless = headlessHooks
         applyServerMode()
+        SoundFx.apply(this)
         mainHandler.postDelayed(keepAliveTick, 5_000L)
         Logger.i(TAG, "media service ready: session, notification and receivers up")
     }
@@ -463,6 +466,13 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         mainHandler.post {
             PlayerHost.keepVisible()
             player()?.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('spotify')", null)
+        }
+    }
+
+    /** SpotifyWatcher: the Spotify app on this phone was closed (its notification went away). */
+    fun onSpotifyClosed() {
+        mainHandler.post {
+            player()?.evaluateJavascript("window.spoSrvSpotifyClosed&&window.spoSrvSpotifyClosed()", null)
         }
     }
 
@@ -838,6 +848,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     }
 
     override fun onDestroy() {
+        SoundFx.release()
         releaseWakeLock()
         releaseServerLocks()
         unregisterNetworkWatch()
@@ -1032,6 +1043,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             currentTitle = obj.optString("track", "")
             currentArtist = obj.optString("artist", "")
             currentAlbum = obj.optString("album", "")
+            currentUri = obj.optString("uri", "").takeIf { it.startsWith("spotify:") } ?: ""
             val coverUrl = obj.optString("cover", "")
 
             if (coverUrl.isNotEmpty() && coverUrl != "null" && coverUrl != lastCoverUrl) {
@@ -1218,12 +1230,20 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     }
 
     private fun buildNotification(): Notification {
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val server = ServerMode.isOn(this)
+        // Server Mode: tapping the notification opens the real Spotify app on the song (SpotiOS
+        // is the speaker there, Spotify the remote). Otherwise, or without Spotify, SpotiOS.
+        val launchIntent = (if (server) ServerMode.spotifyIntent(this, currentUri) else null)
+            ?: packageManager.getLaunchIntentForPackage(packageName)
         val contentIntent = PendingIntent.getActivity(
             this, 0, launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val server = ServerMode.isOn(this)
+        val key = "${launchIntent?.`package`}|${launchIntent?.dataString}"
+        if (key != sessionActivityKey && ::mediaSession.isInitialized) {
+            sessionActivityKey = key
+            runCatching { mediaSession.setSessionActivity(contentIntent) }
+        }
         if (server && serverIdle()) return buildServerNotification(contentIntent)
 
         val prevAction = NotificationCompat.Action.Builder(
@@ -1292,9 +1312,9 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
 
     /** Server Mode with nothing playing: says whether SpotiOS is ready on Spotify Connect. */
     private fun buildServerNotification(contentIntent: PendingIntent): Notification {
-        val name = getSharedPreferences("spotilol_prefs", MODE_PRIVATE).getString("SpoDeviceName", null)
-            ?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: "SpotiOS"
-        val text = when (connLabel) {
+        val name = "SpotiOS"
+        // AdGuard, a VPN or Private DNS blocking Spotify comes first: nothing works until it's off.
+        val text = runCatching { com.project.lol.util.NetCheck.problemText(this) }.getOrNull() ?: when (connLabel) {
             "ready" -> getString(R.string.server_notif_ready, name)
             "signin" -> getString(R.string.server_notif_signin)
             "offline" -> getString(R.string.server_notif_offline)

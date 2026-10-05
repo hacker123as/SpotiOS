@@ -5,6 +5,8 @@
 -keep class com.project.lol.webview.helpers.** { *; }
 -keep class com.project.lol.service.MediaNotificationService { *; }
 -keep class com.project.lol.service.ServerWatchdog { <init>(...); }
+-keep class com.project.lol.service.ServerBootWorker { <init>(...); }
+-keep class com.project.lol.update.UpdateCheckWorker { <init>(...); }
 -keep class com.project.lol.proxy.LocalProxyManager { *; }
 -keep class com.project.lol.ui.SplashActivity { *; }
 -keep class com.project.lol.ui.MainActivity { *; }
