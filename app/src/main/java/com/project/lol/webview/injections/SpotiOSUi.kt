@@ -74,6 +74,44 @@ html.spo-artwall body::after{
 }
 html.spo-lite.spo-artwall body::after,html.spo-artwall:has(#spotilol-amoled-theme) body::after{display:none!important}
 html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transparent!important}
+/* ---------- "Play on" output picker ---------- */
+#spoOut{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.42);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+#spoOut.open{opacity:1;pointer-events:auto}
+#spoOut .spo-out-card{width:min(560px,calc(100vw - 20px));margin-bottom:calc(var(--spo-safe-b) + 10px);padding:10px;border-radius:28px;box-sizing:border-box;
+  background:rgba(34,34,40,.82);backdrop-filter:blur(30px) saturate(190%);-webkit-backdrop-filter:blur(30px) saturate(190%);box-shadow:var(--spo-rim),var(--spo-drop);
+  transform:translateY(30px);transition:transform .42s var(--spo-sheet);font-family:-apple-system,system-ui,Roboto,sans-serif;color:#fff}
+#spoOut.open .spo-out-card{transform:none}
+#spoOut .spo-out-t{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.6);padding:8px 12px 10px}
+#spoOut .spo-out-now{font-size:13px;font-weight:700;color:var(--spo-accent);padding:0 12px 10px}
+#spoOut button{display:flex;align-items:center;gap:14px;width:100%;border:0;background:transparent;color:#fff;text-align:left;padding:12px;border-radius:18px;font:inherit}
+#spoOut button:active{background:rgba(255,255,255,.1)}
+#spoOut button svg{width:26px;height:26px;flex:none}
+#spoOut button b{display:block;font-size:16px}
+#spoOut button small{display:block;font-size:12.5px;color:rgba(255,255,255,.6);margin-top:2px}
+#spoOut .spo-out-cancel{justify-content:center;font-weight:700;margin-top:6px;background:rgba(255,255,255,.08)}
+/* ---------- phone-style pages (portrait) ----------
+   JS tags the playlist/album/show header with data-spo-hero (an attribute
+   React never sets, so it survives re-renders) and its cover wrapper with
+   data-spo-hero-img. */
+@media (orientation:portrait){
+  html.spo [data-spo-hero]{display:flex!important;flex-direction:column!important;align-items:center!important;text-align:center!important;gap:16px!important;height:auto!important;min-height:0!important;padding:6px 16px 4px!important}
+  html.spo [data-spo-hero]>*{max-width:100%!important;align-items:center!important;text-align:center!important;margin-left:0!important;margin-right:0!important}
+  html.spo [data-spo-hero-img]{width:min(66vw,320px)!important;height:auto!important;min-width:0!important;flex:none!important;margin:0!important;aspect-ratio:1/1}
+  html.spo [data-spo-hero-img] img{width:100%!important;height:100%!important;object-fit:cover!important;border-radius:16px!important;box-shadow:0 24px 60px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35)!important}
+  html.spo [data-spo-hero] h1{font-size:clamp(24px,7.4vw,34px)!important;line-height:1.1!important;letter-spacing:-.025em!important;text-align:center!important}
+  html.spo [data-spo-hero] :is(span,div){justify-content:center!important}
+  /* track rows like the app: cover, title and artist, then the more button */
+  html.spo [data-testid=tracklist-row]>[aria-colindex]:not([aria-colindex="2"]):not(:last-child){display:none!important}
+  html.spo [data-testid=tracklist-row]{grid-template-columns:[first] minmax(0,1fr) [last] auto!important;padding:4px 6px!important;min-height:58px}
+  html.spo [data-testid=tracklist-row] [data-testid=add-button],html.spo [data-testid=tracklist-row] [data-testid=add-to-playlist-button]{display:none!important}
+  html.spo [data-testid=tracklist-row] img{width:48px!important;height:48px!important}
+}
+/* ---------- glass on the pages themselves ---------- */
+html.spo [data-testid=topbar-content]{border-radius:0 0 22px 22px!important;background:rgba(18,18,22,.55)!important;backdrop-filter:blur(24px) saturate(180%)!important;-webkit-backdrop-filter:blur(24px) saturate(180%)!important;box-shadow:var(--spo-rim)!important}
+html.spo [data-testid=action-bar-row]{border-radius:22px!important}
+html.spo [data-encore-id=card]{background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.03))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.04)!important}
+html.spo [data-testid=tracklist-row]:hover,html.spo [role=row]:focus-within [data-testid=tracklist-row]{background:rgba(255,255,255,.05)!important}
+html.spo [data-encore-id=buttonSecondary]{background:rgba(255,255,255,.1)!important;border:0!important;box-shadow:var(--spo-rim)!important;border-radius:999px!important}
 /* the grey bar along the bottom was the list's horizontal scrollbar; lists never scroll sideways */
 html.spo .os-scrollbar-horizontal{display:none!important}
 /* no 300ms double-tap-zoom wait: taps on songs and buttons fire right away */
@@ -409,7 +447,7 @@ function openSearch(){
 function go(k){
   closeSheet();
   if(k==='settings'){try{AndBridge.openSettings();}catch(e){}return;}
-  if(k==='library'){toggleLib();setTimeout(syncTabs,350);return;}
+  if(k==='library'){libByUser=true;toggleLib();setTimeout(syncTabs,350);return;}
   if(libOpen())toggleLib();
   try{if(typeof closeNowPlay==='function')closeNowPlay();}catch(e){}
   var p=location.pathname;
@@ -487,6 +525,35 @@ window.spoOpenDevices=function(){
   if(b){b.click();return;}
   var o=qs('aside[data-testid=now-playing-bar] .encore-bright-accent-set button');
   if(o)o.click();
+};
+
+/* ---------- "Play on": this phone's outputs or Spotify Connect ---------- */
+function outSheet(){
+  var o=byId('spoOut');if(o)return o;
+  o=document.createElement('div');o.id='spoOut';
+  o.innerHTML='<div class="spo-out-card"><div class="spo-out-t">Play on</div><div class="spo-out-now" id="spo-out-now"></div>'
+    +'<button type="button" data-o="phone">'+I.dev+'<span><b>This phone</b><small>Speaker, Bluetooth, headphones, car</small></span></button>'
+    +'<button type="button" data-o="connect">'+I.queue+'<span><b>Spotify Connect</b><small>Laptop, TV, speakers, consoles</small></span></button>'
+    +'<button type="button" data-o="x" class="spo-out-cancel">Cancel</button></div>';
+  o.addEventListener('click',function(e){
+    var b=e.target.closest('button[data-o]');
+    if(!b&&e.target!==o)return;
+    var k=b?b.getAttribute('data-o'):'x';
+    o.classList.remove('open');
+    haptic();
+    if(k==='phone'){
+      /* playing on another device: bring it back here first via Spotify's picker */
+      if(otherDevice()){closeSheet();setTimeout(window.spoOpenDevices,250);}
+      else{try{AndBridge.openAudioOutput();}catch(err){}}
+    }else if(k==='connect'){closeSheet();setTimeout(window.spoOpenDevices,250);}
+  });
+  document.body.appendChild(o);
+  return o;
+}
+window.spoPickOutput=function(){
+  var o=outSheet(),dv=otherDevice();
+  byId('spo-out-now').textContent=dv||'Playing on this phone';
+  requestAnimationFrame(function(){o.classList.add('open');});
 };
 
 /* ---------- lyrics (LRCLIB, open source) ---------- */
@@ -599,7 +666,7 @@ function buildSheet(){
     +'<div class="spo-actions">'
     +'<button class="spo-ib" id="spo-lyrics">'+I.lyrics+'<span>Lyrics</span></button>'
     +'<button class="spo-ib" id="spo-queue">'+I.queue+'<span>Queue</span></button>'
-    +'<button class="spo-ib" id="spo-devices">'+I.dev+'<span>Devices</span></button>'
+    +'<button class="spo-ib" id="spo-devices">'+I.dev+'<span>Play on</span></button>'
     +'<button class="spo-ib" id="spo-timer">'+I.moon+'<span>Sleep</span></button>'
     +'<button class="spo-ib" id="spo-dl">'+I.dl+'<span>Save</span></button>'
     +'<button class="spo-ib" id="spo-pip">'+I.pip+'<span>Float</span></button>'
@@ -618,7 +685,7 @@ function buildSheet(){
     if(window.__spoLrc===false){closeSheet();setTimeout(function(){act('spl-lyrics');},280);return;}
     toggleLyr();
   };
-  byId('spo-devices').onclick=function(){haptic();closeSheet();setTimeout(window.spoOpenDevices,280);};
+  byId('spo-devices').onclick=function(){haptic();window.spoPickOutput();};
   byId('spo-queue').onclick=function(){closeSheet();setTimeout(function(){act('spl-queue');},280);};
   byId('spo-timer').onclick=function(){act('spl-timer');};
   byId('spo-dl').onclick=function(){haptic();act('spl-download');};
@@ -907,8 +974,36 @@ document.addEventListener('click',function(e){
   if(e.target.closest&&e.target.closest('[data-testid=user-widget-link]')){setTimeout(addDevItem,80);setTimeout(addDevItem,300);}
 },true);
 
+/* ---------- phone-style headers ---------- */
+function mobileHero(){
+  var sec=qs('main section[data-testid$="-page"]:not([data-testid=artist-page]):not([data-testid=home-page]):not([data-testid=search-page])');
+  if(!sec)return;
+  if(sec.querySelector('[data-spo-hero]'))return;
+  var h1=sec.querySelector('h1');if(!h1)return;
+  var head=sec.firstElementChild;if(!head||!head.contains(h1))return;
+  var imgs=head.querySelectorAll('img'),img=null,best=0;
+  for(var i=0;i<imgs.length;i++){var w=imgs[i].getBoundingClientRect().width;if(w>best&&w>=80){best=w;img=imgs[i];}}
+  if(!img)return;
+  var a=img;while(a&&!a.contains(h1))a=a.parentElement;
+  if(!a||a===sec)return;
+  var wrap=img;while(wrap.parentElement&&wrap.parentElement!==a)wrap=wrap.parentElement;
+  a.setAttribute('data-spo-hero','');
+  wrap.setAttribute('data-spo-hero-img','');
+}
+
+/* ---------- start on Home, not with Library open ---------- */
+var libByUser=false,bootAt=Date.now();
+document.addEventListener('click',function(e){
+  if(e.isTrusted&&e.target.closest&&e.target.closest('#Desktop_LeftSidebar_Id,#global-nav-bar'))libByUser=true;
+},true);
+function homeFirst(){
+  if(libByUser||Date.now()-bootAt>20000)return;
+  if(libOpen())toggleLib();
+}
+
 /* ---------- back button ---------- */
 window.spoBack=function(){
+  var po=byId('spoOut');if(po&&po.classList.contains('open')){po.classList.remove('open');return true;}
   if(sheetOpen){closeSheet();return true;}
   if(qs('[data-tippy-root] [role=menu]')){
     document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,bubbles:true}));
@@ -969,6 +1064,7 @@ setInterval(function(){
   var mo=!!qs('[data-tippy-root] [role=menu]');
   if(root().classList.contains('spo-menu')!==mo)root().classList.toggle('spo-menu',mo);
   if(mo)addDevItem();
+  mobileHero();homeFirst();
   recoverCrash();
   artWall();
   hookPlayer();

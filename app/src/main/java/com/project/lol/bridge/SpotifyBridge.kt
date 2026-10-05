@@ -226,6 +226,32 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         activity.runOnUiThread { onOpenSettingsRequest?.invoke() }
     }
 
+    /** System audio output picker (phone speaker, Bluetooth, wired, cast). */
+    @JavascriptInterface
+    fun openAudioOutput() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                val shown = runCatching {
+                    android.media.MediaRouter2.getInstance(activity).showSystemOutputSwitcher()
+                }.getOrDefault(false)
+                if (shown) return@runOnUiThread
+            }
+            val panel = android.content.Intent("com.android.settings.panel.action.MEDIA_OUTPUT")
+                .putExtra("com.android.settings.panel.extra.PACKAGE_NAME", activity.packageName)
+            if (runCatching { activity.startActivity(panel) }.isSuccess) return@runOnUiThread
+            runCatching {
+                activity.sendBroadcast(
+                    android.content.Intent("com.android.systemui.action.LAUNCH_MEDIA_OUTPUT_DIALOG")
+                        .setPackage("com.android.systemui")
+                        .putExtra("package_name", activity.packageName)
+                )
+            }.onFailure {
+                runCatching { activity.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)) }
+            }
+        }
+    }
+
     @JavascriptInterface
     fun openDevScripts() {
         val activity = activityRef.get() ?: return
