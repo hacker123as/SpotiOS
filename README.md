@@ -71,6 +71,7 @@ You can always change it later in **Settings → Downloads → Background downlo
 - One tap on a song plays it right away.
 - Full-screen Now Playing with scrubbing, shuffle, repeat, like, queue, lyrics, sleep timer and download.
   Tap or swipe up on the mini player to open it, swipe down to close.
+- **Queue** opens right inside Now Playing. Tap any song in it to skip straight to it.
 - Media notification, lock screen controls, Bluetooth and headset buttons, and car controls.
 - Music pauses when Bluetooth disconnects (on by default, can be turned off).
 - Long-press songs, cards and library rows for quick actions such as add to queue, go to artist and share.
@@ -95,6 +96,10 @@ You can always change it later in **Settings → Downloads → Background downlo
   and you can remove a whole group or everything at once.
 - **Settings → Downloads → Open offline library** shows what you can play without internet.
 
+The offline library looks like Spotify's: your downloaded playlists, albums and Liked Songs with their covers,
+a page for each with its full track list, and songs you haven't downloaded shown grayed out.
+Songs play inside their playlist, so next and previous stay in that playlist.
+
 What works offline: songs you've downloaded play from the offline library, with their artwork and details.
 What doesn't: Spotify's own pages (Home, Search, artist pages and streaming) need internet.
 When your phone is offline, an "Offline mode" label shows under the tab bar, and if you open SpotiOS with no
@@ -108,10 +113,18 @@ Turn this on or off with **Settings → Lyrics for Every Song**.
 
 ## Play on another device or speaker
 
-- In Now Playing, tap the devices button to open **Play on**.
-  - **This phone** opens Android's output picker, where you can choose the phone speaker or a Bluetooth device.
-  - **Spotify Connect** lists your other Spotify devices, such as a laptop, speaker or TV.
-- It works both ways. SpotiOS shows up as a device in Spotify on your laptop or another phone, so you can send music to it from there.
+- In Now Playing, tap **Play on**. It opens inside the player and lists:
+  - what's playing now, with a volume slider when it's another device,
+  - **This phone**, and **Phone speaker or Bluetooth** for Android's output picker,
+  - your other Spotify devices, such as a laptop, speaker or TV. Tap one to move the music there.
+- It works both ways. Your phone shows up as **SpotiOS** in Spotify on your laptop or another phone, so you can send
+  music to it from there. Change the name in **Settings → Player → Device name**.
+
+## Open Spotify links in SpotiOS
+
+Song, album, playlist and artist links, `spotify:` links, and Spotify links you share to SpotiOS open in the app.
+On Android 12 and newer, go to **Settings → Advanced → Open Spotify Links**, turn on **Open supported links** and add the
+Spotify links. If the official Spotify app is installed, Android may still send links there.
 
 ## Settings guide
 
@@ -134,20 +147,28 @@ Open the **Settings** tab in the tab bar.
 | Background downloads | Opens the battery setting so downloads keep going. |
 | Manage downloads | Lists saved music and lets you remove it. |
 | Open offline library | Shows what plays without internet. |
+| Device name | The name your other devices see in Spotify Connect (default SpotiOS). |
+| Developer mode | Turns on user scripts, the script installer and the Dev menu. |
 | User scripts (Dev) | Add your own scripts, see below. |
 
 Some things can't be done because Spotify's web player doesn't allow them: crossfade, audio quality, an equalizer and volume boost. Spotify's audio is copy-protected, so the app can't process the sound itself.
 
 ## Dev menu: user scripts
 
-SpotiOS can run your own JavaScript on Spotify's pages, like Tampermonkey.
+SpotiOS can run your own JavaScript on Spotify's pages, like Tampermonkey. It's off until you turn it on.
 
-1. Tap your account picture, then **Dev** (or go to **Settings → Dev → User scripts**).
-2. Tap **Add**, then paste a script or install one from a URL.
-3. Turn scripts on or off with the switch. SpotiOS reloads the page when you close the list.
+1. Go to **Settings → Advanced → Dev** and turn on **Developer mode**.
+2. Install a script:
+   - On [Greasy Fork](https://greasyfork.org/en/scripts/by-site/spotify.com), tap **Install** and pick SpotiOS.
+     If your browser just shows the code, tap **Share** and pick SpotiOS instead.
+   - Or use **Settings → Dev → Install from link**, or open a downloaded `.user.js` file.
+   - SpotiOS shows the script's name, version, what it runs on and its code before you install it.
+     Installing a script with the same name again updates it.
+3. Manage scripts in **Settings → Dev → User scripts** or the **Dev** item in the account menu.
+   New scripts start right away; turning one off takes effect when the page reloads.
 
 Supported in scripts:
-- The usual `// ==UserScript==` header, with `@name`, `@match` and `@include`.
+- The usual `// ==UserScript==` header, with `@name`, `@match`, `@include` and `@require` (fetched when you install).
 - `GM_addStyle`, `GM_getValue`, `GM_setValue`, `GM_deleteValue`, `GM_listValues`, `GM_xmlhttpRequest`,
   `GM_setClipboard`, `GM_openInTab` and `GM_notification`, plus the `GM.*` promise versions.
 
