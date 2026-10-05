@@ -101,8 +101,33 @@ html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transpare
   html.spo [data-spo-hero] h1{font-size:clamp(24px,7.4vw,34px)!important;line-height:1.1!important;letter-spacing:-.025em!important;text-align:center!important}
   html.spo [data-spo-hero] :is(span,div){justify-content:center!important}
   /* track rows like the app: cover, title and artist, then the more button */
-  html.spo [data-testid=tracklist-row]>[aria-colindex]:not([aria-colindex="2"]):not(:last-child){display:none!important}
-  html.spo [data-testid=tracklist-row]{grid-template-columns:[first] minmax(0,1fr) [last] auto!important;padding:4px 6px!important;min-height:58px}
+  html.spo section:not([data-testid=artist-page]) [data-testid=tracklist-row]>[aria-colindex]:not([aria-colindex="2"]):not(:last-child){display:none!important}
+  html.spo section:not([data-testid=artist-page]) [data-testid=tracklist-row]{grid-template-columns:[first] minmax(0,1fr) [last] auto!important}
+  html.spo [data-testid=tracklist-row]{padding:4px 6px!important;min-height:58px}
+  /* artist Popular list keeps its numbers, like the app */
+  html.spo section[data-testid=artist-page] [data-testid=tracklist-row]>[aria-colindex]:not([aria-colindex="1"]):not([aria-colindex="2"]):not(:last-child){display:none!important}
+  html.spo section[data-testid=artist-page] [data-testid=tracklist-row]{grid-template-columns:[index] 30px [first] minmax(0,1fr) [last] auto!important}
+  /* artist hero: full-bleed photo, big name bottom-left */
+  html.spo section[data-testid=artist-page]>div>div:first-child:not([data-encore-id]){height:min(54vh,470px)!important;min-height:300px!important;position:relative}
+  html.spo section[data-testid=artist-page]>div>div:first-child:not([data-encore-id])::after{content:"";position:absolute;inset:auto 0 0 0;height:55%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.72));pointer-events:none;z-index:0}
+  html.spo section[data-testid=artist-page]>div>div:first-child:not([data-encore-id])>div.contentSpacing{position:absolute!important;left:0;right:0;bottom:0;z-index:1;padding:0 18px 14px!important;display:flex!important;flex-direction:column!important;justify-content:flex-end!important}
+  html.spo section[data-testid=artist-page] :is(h1,span.encore-text-headline-large){font-size:clamp(40px,13vw,64px)!important;font-weight:900!important;line-height:.98!important;letter-spacing:-.04em!important;text-shadow:0 2px 24px rgba(0,0,0,.45)}
+  html.spo section[data-testid=artist-page] [data-testid=action-bar-row]{padding:12px 16px!important}
+  /* Home: two-column shortcut tiles and sideways shelves */
+  html.spo [data-spo-shortcuts]{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;padding:4px 10px 8px!important;width:auto!important}
+  html.spo [data-spo-shortcuts]>*{min-width:0!important;width:auto!important;height:56px!important;border-radius:10px!important;overflow:hidden!important;background:rgba(255,255,255,.08)!important;box-shadow:var(--spo-rim)!important;backdrop-filter:blur(18px) saturate(170%);-webkit-backdrop-filter:blur(18px) saturate(170%)}
+  html.spo [data-spo-shortcuts] img{width:56px!important;height:56px!important;object-fit:cover!important;border-radius:0!important}
+  html.spo section[data-testid=home-page] [data-testid=component-shelf] [data-testid=grid-container]{display:grid!important;grid-template-columns:none!important;grid-template-rows:auto!important;grid-auto-flow:column!important;grid-auto-columns:min(42vw,200px)!important;grid-auto-rows:auto!important;gap:12px!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory;padding:0 10px 6px!important;scrollbar-width:none}
+  html.spo section[data-testid=home-page] [data-testid=component-shelf] [data-testid=grid-container]>*{scroll-snap-align:start;min-width:0!important}
+}
+/* "Offline mode" under the tab bar */
+#spoOffline{position:fixed;left:0;right:0;bottom:calc(var(--spo-safe-b) + 2px);z-index:2147483644;display:none;align-items:center;justify-content:center;gap:6px;height:16px;font:700 11.5px/1 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:rgba(255,255,255,.82);pointer-events:none}
+#spoOffline svg{width:12px;height:12px}
+html.spo-offline #spoOffline{display:flex}
+html.spo-offline #spoTabs{bottom:calc(var(--spo-safe-b) + var(--spo-gap) + 12px)}
+html.spo-offline.spo-tabs{--spo-mini-bottom:calc(var(--spo-safe-b) + var(--spo-gap) + var(--spo-tab-h) + 20px)}
+html.spo-np-open #spoOffline{display:none}
+@media (orientation:portrait){
   html.spo [data-testid=tracklist-row] [data-testid=add-button],html.spo [data-testid=tracklist-row] [data-testid=add-to-playlist-button]{display:none!important}
   html.spo [data-testid=tracklist-row] img{width:48px!important;height:48px!important}
 }
@@ -160,7 +185,7 @@ html.spo :is(input[data-testid=search-input],form[role=search] input):focus{box-
 html.spo button:has(>[data-encore-id=chip]){background:transparent!important;box-shadow:none!important;border:0!important;transition:transform .34s var(--spo-spring)!important}
 html.spo button:has(>[data-encore-id=chip]):active{transform:scale(.92)!important}
 html.spo [data-encore-id=chip]{background:rgba(255,255,255,.08)!important;box-shadow:var(--spo-rim)!important;border:0!important;border-radius:999px!important;color:#fff!important;font-weight:600!important;transition:background .18s,color .18s!important}
-html.spo :is([aria-checked=true],[aria-pressed=true])>[data-encore-id=chip]{background:#fff!important;color:#000!important;box-shadow:0 6px 20px rgba(255,255,255,.14)!important}
+html.spo :is([aria-checked=true],[aria-pressed=true])>[data-encore-id=chip]{background:var(--spo-accent)!important;color:#000!important;box-shadow:0 6px 20px rgba(30,215,96,.28)!important}
 
 /* ---------- cards, rows, buttons ---------- */
 html.spo [data-encore-id=card]{border-radius:20px!important;transition:transform .34s var(--spo-spring),background .18s!important}
@@ -991,6 +1016,38 @@ function mobileHero(){
   wrap.setAttribute('data-spo-hero-img','');
 }
 
+/* ---------- Home shortcuts: the first block of wide link tiles ---------- */
+function homeShortcuts(){
+  var sec=qs('main section[data-testid=home-page]');
+  if(!sec||sec.querySelector('[data-spo-shortcuts]'))return;
+  var links=sec.querySelectorAll('a[href]');
+  for(var i=0;i<links.length&&i<40;i++){
+    var tile=links[i];
+    while(tile.parentElement&&tile.parentElement!==sec){
+      var p=tile.parentElement,n=p.children.length;
+      if(n>=4&&n<=10){
+        var ok=0;
+        for(var j=0;j<n;j++){var c=p.children[j],r=c.getBoundingClientRect();if(c.querySelector('img')&&r.width>r.height*2&&r.height<90)ok++;}
+        if(ok>=n-1){p.setAttribute('data-spo-shortcuts','');return;}
+        break;
+      }
+      tile=p;
+    }
+  }
+}
+
+/* ---------- "Offline mode" label ---------- */
+function offlineLabel(){
+  if(!byId('spoOffline')){
+    var d=document.createElement('div');d.id='spoOffline';
+    d.innerHTML='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.3.3 15.7 14.7l-1 1-3.3-3.3A6.5 6.5 0 0 1 8 13.5V12a5 5 0 0 0 2.3-.6L8.9 10A3.5 3.5 0 0 1 8 10.5V9l-1-1H2.6A5.6 5.6 0 0 0 2 8a6 6 0 0 0 .4 2l-1.4.5A7.5 7.5 0 0 1 .5 8c0-1.3.3-2.5.9-3.6L.3 1.3z"/></svg>Offline mode';
+    document.body.appendChild(d);
+  }
+  var off=navigator.onLine===false;
+  if(root().classList.contains('spo-offline')!==off)root().classList.toggle('spo-offline',off);
+}
+window.addEventListener('online',offlineLabel);window.addEventListener('offline',offlineLabel);
+
 /* ---------- start on Home, not with Library open ---------- */
 var libByUser=false,bootAt=Date.now();
 document.addEventListener('click',function(e){
@@ -1064,7 +1121,7 @@ setInterval(function(){
   var mo=!!qs('[data-tippy-root] [role=menu]');
   if(root().classList.contains('spo-menu')!==mo)root().classList.toggle('spo-menu',mo);
   if(mo)addDevItem();
-  mobileHero();homeFirst();
+  mobileHero();homeFirst();homeShortcuts();offlineLabel();
   recoverCrash();
   artWall();
   hookPlayer();
