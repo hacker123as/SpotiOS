@@ -2,9 +2,18 @@ package com.project.lol.webview.injections
 
 object CssHack {
     const val CONTENT = """
-            window.closeNowPlay=function(){
+            window.closeNowPlay=function(auto){
                 var rc=document.querySelector('#Desktop_PanelContainer_Id');
-                if(rc&&rc.parentNode.parentNode.ariaHidden=='false'){clickNP();}
+                var open=!!(rc&&rc.parentNode.parentNode.ariaHidden=='false');
+                if(!open)return;
+                // The right panel also hosts the Connect picker and the queue. Only
+                // toggle it when it is showing Now Playing, otherwise the NPV button
+                // swaps the picker for Now Playing and the next tick closes it.
+                if(auto&&window.__spoPanelHold&&Date.now()<window.__spoPanelHold)return;
+                var npv=document.querySelector('button[data-testid="control-button-npv"]');
+                if(npv&&(npv.getAttribute('data-active')==='false'||npv.getAttribute('aria-pressed')==='false'))return;
+                if(document.querySelector('button[data-active="true"]:is([data-testid*="queue"],[data-testid*="connect"],[data-testid*="device"]),button[aria-pressed="true"]:is([data-testid*="queue"],[data-testid*="connect"],[data-testid*="device"])'))return;
+                clickNP();
             };
             window.clickNP=function(){
                 var cab=document.querySelector('button[data-testid="cover-art-button"]')||document.querySelector('button[data-testid="control-button-npv"]');

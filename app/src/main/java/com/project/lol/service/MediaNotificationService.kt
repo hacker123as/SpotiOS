@@ -962,6 +962,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setColor(accent())
             .setStyle(buildMediaStyle(isShuffleAvailable))
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
         actions.forEach { builder.addAction(it) }
 
         coverBitmap?.let { builder.setLargeIcon(it) }

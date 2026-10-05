@@ -426,6 +426,7 @@ class MainActivity : ComponentActivity() {
                             val bridge = remember {
                                 SpotifyBridge(WeakReference(this@MainActivity))
                             }
+                            bridge.onJs = { js -> webView?.evaluateJavascript(js, null) }
 
                             bridge.onTimerDialogRequest = {
                                 showSleepTimerDialog.value = true

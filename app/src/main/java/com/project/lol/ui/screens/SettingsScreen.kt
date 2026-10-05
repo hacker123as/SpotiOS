@@ -135,6 +135,7 @@ import compose.icons.tablericons.ChevronRight
 import compose.icons.tablericons.Click
 import compose.icons.tablericons.CloudOff
 import compose.icons.tablericons.HandFinger
+import compose.icons.tablericons.Message
 import compose.icons.tablericons.Photo
 import compose.icons.tablericons.Code
 import compose.icons.tablericons.ColorSwatch
@@ -486,6 +487,20 @@ fun SettingsContent(
                         onCheckedChange = { enabled ->
                             spoArtWall = enabled
                             prefs.edit().putBoolean("SpoArtWall", enabled).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    var spoLrc by remember { mutableStateOf(prefs.getBoolean("SpoLrc", true)) }
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_spo_lyrics),
+                        subtitle = stringResource(R.string.settings_spo_lyrics_subtitle),
+                        icon = TablerIcons.Message,
+                        checked = spoLrc,
+                        onCheckedChange = { enabled ->
+                            spoLrc = enabled
+                            prefs.edit().putBoolean("SpoLrc", enabled).apply()
                         }
                     )
 

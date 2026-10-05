@@ -10,8 +10,8 @@ import org.json.JSONObject
  */
 object SpotiOSUi {
 
-    fun content(tabBar: Boolean, artWallpaper: Boolean = true): String =
-        "window.__spoTabs=$tabBar;window.__spoArtWall=$artWallpaper;\n" +
+    fun content(tabBar: Boolean, artWallpaper: Boolean = true, lrcLib: Boolean = true): String =
+        "window.__spoTabs=$tabBar;window.__spoArtWall=$artWallpaper;window.__spoLrc=$lrcLib;\n" +
             JS.replace("__SPO_CSS__", JSONObject.quote(CSS))
 
     private const val CSS = """
@@ -80,9 +80,7 @@ html.spo :is(.main-view-container,.main-view-container__scroll-node,[data-testid
 html.spo :is(#main-view,.Root__main-view) main{padding-bottom:var(--spo-dock)!important}
 html.spo .Root__main-view::after{
   content:"";position:fixed;left:0;right:0;bottom:0;height:calc(var(--spo-dock) + 24px);z-index:50;pointer-events:none;
-  background:linear-gradient(180deg,rgba(4,5,7,0),rgba(4,5,7,.6) 55%,rgba(4,5,7,.9));
-  backdrop-filter:blur(10px) saturate(140%);-webkit-backdrop-filter:blur(10px) saturate(140%);
-  -webkit-mask-image:linear-gradient(180deg,transparent,#000 60%);mask-image:linear-gradient(180deg,transparent,#000 60%);
+  background:linear-gradient(180deg,rgba(4,5,7,0),rgba(4,5,7,.55) 45%,rgba(4,5,7,.92));
 }
 
 /* ---------- typography ---------- */
@@ -273,6 +271,23 @@ html.spo-np-open #spoTabs,html:has([data-tippy-root] [role=menu]) #spoTabs{trans
 #spoNP .spo-actions{display:flex;justify-content:space-between;padding-top:2px}
 #spoNP .spo-actions .spo-ib{width:auto;height:auto;min-width:56px;flex-direction:column;gap:5px;padding:8px 6px;border-radius:16px;color:rgba(255,255,255,.75);font-size:11px;font-weight:600}
 #spoNP .spo-actions .spo-ib.on{color:var(--spo-accent)}
+#spoNP .spo-actions .spo-ib{flex:1 1 0;min-width:0}
+#spoNP .spo-dev{display:none;align-self:center;max-width:100%;margin-top:-4px;padding:5px 12px;border-radius:999px;background:rgba(var(--spl-accent-rgb,30,215,96),.16);color:var(--spo-accent);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#spoNP .spo-dev.show{display:block}
+/* in-sheet lyrics (LRCLIB), Apple Music style */
+#spoNP .spo-lyr{display:none;width:100%;max-width:560px;flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:14vh 2px 22vh;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 78%,transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 78%,transparent 100%)}
+#spoNP .spo-lyr::-webkit-scrollbar{display:none}
+#spoNP.lyr .spo-lyr{display:block}
+#spoNP.lyr .spo-art-wrap{display:none}
+#spoNP .spo-lyr p{margin:0 0 .6em;font-size:clamp(22px,6.6vw,32px);font-weight:800;line-height:1.2;letter-spacing:-.02em;color:rgba(255,255,255,.32);transition:color .35s,transform .35s var(--spo-ease);transform-origin:left center;cursor:pointer}
+#spoNP .spo-lyr p.past{color:rgba(255,255,255,.55)}
+#spoNP .spo-lyr p.on{color:#fff;transform:scale(1.03)}
+#spoNP .spo-lyr.plain p{color:rgba(255,255,255,.88);font-size:clamp(19px,5.4vw,24px);cursor:default}
+#spoNP .spo-lyr .spo-lyr-msg{margin-top:12vh;text-align:center;color:rgba(255,255,255,.62);font-size:16px;font-weight:600;line-height:1.5}
+#spoNP .spo-lyr .spo-lyr-msg button{margin-top:14px;border:0;border-radius:999px;padding:10px 18px;background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:14px}
+#spoNP .spo-lyr .spo-lyr-src{font-size:11px;font-weight:600;color:rgba(255,255,255,.38);margin-top:2.4em}
+html.spo-lite #spoNP .spo-lyr p{transition:none}
 /* shorter phones: shrink art and transport so the action row fits without scrolling */
 @media (orientation:portrait) and (max-height:820px){
   #spoNP .spo-in{gap:clamp(4px,1.2vh,12px)}
@@ -334,6 +349,7 @@ var I={
   queue:SV+'<path d="M3 6h13M3 12h13M3 18h8"/><path d="M16 15v6l5-3z" fill="currentColor"/></svg>',
   dl:SV+'<path d="M12 3v12M7 10.5l5 5 5-5M5 20h14"/></svg>',
   pip:SV+'<rect x="3" y="4" width="18" height="14" rx="2.5"/><rect x="12" y="10.5" width="6.5" height="5" rx="1" fill="currentColor"/></svg>',
+  dev:SV+'<rect x="4" y="3" width="10" height="18" rx="2"/><circle cx="9" cy="16" r="1.6"/><path d="M17.5 8.5a5 5 0 0 1 0 7M20 6a8.5 8.5 0 0 1 0 12"/></svg>',
   volLo:SV+'<path d="M11 5 6 9H3v6h3l5 4z"/></svg>',
   volHi:SV+'<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>'
 };
@@ -432,6 +448,120 @@ function hookPlayer(){
   },{passive:true});
 }
 
+/* ---------- Spotify Connect ---------- */
+function devButton(){
+  var b=qs('button[data-testid="control-button-connect"]')||qs('button[data-testid*="device-picker"]')||qs('button[data-testid*="connect-device"]');
+  if(b)return b;
+  var bs=document.querySelectorAll('aside[data-testid=now-playing-bar] button[aria-label],[data-testid=extra-controls] button[aria-label]');
+  for(var i=0;i<bs.length;i++){
+    var l=(bs[i].getAttribute('aria-label')||'').toLowerCase();
+    if(/device|connect|appareil|dispositi|ger\u00e4t|urz\u0105dz|apparaat|\u0443\u0441\u0442\u0440\u043e\u0439/.test(l))return bs[i];
+  }
+  return null;
+}
+/* "Playing on <device>" from Spotify's own (hidden) bar, or '' when this phone plays */
+function otherDevice(){
+  var b=qs('aside[data-testid=now-playing-bar] .encore-bright-accent-set')||qs('[data-testid=now-playing-bar] [data-testid*="remote"]');
+  return b?txt(b).replace(/\s+/g,' ').slice(0,80):'';
+}
+window.spoOpenDevices=function(){
+  /* keep the auto-close helpers away from the panel while the picker is in use */
+  window.__spoPanelHold=Date.now()+5*60*1000;
+  var b=devButton();
+  if(b){b.click();return;}
+  var o=qs('aside[data-testid=now-playing-bar] .encore-bright-accent-set button');
+  if(o)o.click();
+};
+
+/* ---------- lyrics (LRCLIB, open source) ---------- */
+var lyr={key:'',lines:null,plain:null,state:'',req:0,cur:-1};
+function trackKey(){var t=txt(byId('spl-track'));return t?t+'\u0001'+txt(byId('spl-artist')):'';}
+function parseLrc(s){
+  var out=[];
+  String(s||'').split(/\r?\n/).forEach(function(l){
+    var re=/\[(\d+):(\d+(?:\.\d+)?)\]/g,m,ts=[],last=0;
+    while((m=re.exec(l))){ts.push(parseInt(m[1],10)*60+parseFloat(m[2]));last=re.lastIndex;}
+    var t=l.slice(last).trim();
+    ts.forEach(function(x){out.push({t:x,s:t});});
+  });
+  out.sort(function(a,b){return a.t-b.t;});
+  return out;
+}
+function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function spotifyHasLyrics(){var ly=byId('spl-lyrics');return !!(ly&&ly.style.display!=='none'&&!ly.classList.contains('spl-disabled'));}
+function lyrRender(){
+  var box=byId('spo-lyr');if(!box)return;
+  lyr.cur=-1;box.classList.remove('plain');box.scrollTop=0;
+  var src='<div class="spo-lyr-src">Lyrics from LRCLIB</div>';
+  if(lyr.state==='synced'){
+    box.innerHTML=lyr.lines.map(function(l,i){return '<p data-i="'+i+'">'+(l.s?esc(l.s):'\u266a')+'</p>';}).join('')+src;
+    lyrTick();return;
+  }
+  if(lyr.state==='plain'){
+    box.classList.add('plain');
+    box.innerHTML=lyr.plain.split(/\r?\n/).map(function(l){return '<p>'+(l.trim()?esc(l):'&nbsp;')+'</p>';}).join('')+src;return;
+  }
+  var msg=lyr.state==='loading'?'Finding lyrics\u2026':(lyr.state==='instrumental'?'\u266a Instrumental':(lyr.state==='idle'?'Play a song to see its lyrics':'No lyrics found for this song'));
+  var more=(lyr.state==='none'&&spotifyHasLyrics())?'<br><button type="button" id="spo-lyr-sp">Open Spotify lyrics</button>':'';
+  box.innerHTML='<div class="spo-lyr-msg">'+msg+more+'</div>';
+  var sp=byId('spo-lyr-sp');if(sp)sp.onclick=function(){closeSheet();setTimeout(function(){act('spl-lyrics');},280);};
+}
+function lyrLoad(){
+  var k=trackKey();
+  if(k===lyr.key)return;
+  lyr.key=k;lyr.lines=null;lyr.plain=null;
+  if(!k){lyr.state='idle';lyrRender();return;}
+  lyr.state='loading';lyrRender();
+  var id=String(++lyr.req);
+  var dur=secs(txt(qs('[data-testid="playback-duration"]')));
+  try{AndBridge.lyricsLookup(id,txt(byId('spl-artist')),txt(byId('spl-track')),dur);}
+  catch(e){lyr.state='none';lyrRender();}
+}
+window.spoLyricsResult=function(id,r){
+  if(String(id)!==String(lyr.req))return;
+  if(r&&r.synced){var ls=parseLrc(r.synced);if(ls.length)lyr.lines=ls;}
+  if(r&&r.plain)lyr.plain=String(r.plain);
+  lyr.state=lyr.lines?'synced':(lyr.plain?'plain':(r&&r.instrumental?'instrumental':'none'));
+  lyrRender();
+};
+function lyrPos(){
+  var dur=secs(txt(qs('[data-testid="playback-duration"]')));
+  var pct=progressPct();
+  if(pct!==null&&dur)return pct*dur;
+  return secs(txt(qs('[data-testid="playback-position"]')));
+}
+function lyrTick(){
+  if(lyr.state!=='synced'||!lyr.lines)return;
+  var box=byId('spo-lyr'),t=lyrPos()+0.25,i=-1;
+  for(var j=0;j<lyr.lines.length;j++){if(lyr.lines[j].t<=t)i=j;else break;}
+  if(i===lyr.cur)return;
+  lyr.cur=i;
+  var ps=box.querySelectorAll('p');
+  for(var k=0;k<ps.length;k++){ps[k].classList.toggle('on',k===i);ps[k].classList.toggle('past',k<i);}
+  var on=ps[i];
+  if(on&&!box.__touch)box.scrollTo({top:on.offsetTop-box.clientHeight*0.36,behavior:root().classList.contains('spo-lite')?'auto':'smooth'});
+}
+function toggleLyr(on){
+  if(!sheet)return;
+  if(on===undefined)on=!sheet.classList.contains('lyr');
+  sheet.classList.toggle('lyr',on);
+  byId('spo-lyrics').classList.toggle('on',on);
+  if(on){lyrLoad();lyrTick();}
+}
+function bindLyr(){
+  var box=byId('spo-lyr'),tt=null;
+  box.addEventListener('click',function(e){
+    var p=e.target.closest('p[data-i]');if(!p||!lyr.lines)return;
+    var l=lyr.lines[+p.getAttribute('data-i')],dur=secs(txt(qs('[data-testid="playback-duration"]'))),mx=rangeMax();
+    if(!l||!dur||!mx)return;
+    haptic();
+    try{if(typeof actSeek==='function')actSeek(Math.round(Math.min(1,l.t/dur)*mx));}catch(err){}
+  });
+  /* let people scroll freely; follow the song again a moment after they stop */
+  box.addEventListener('touchstart',function(){box.__touch=true;if(tt)clearTimeout(tt);},{passive:true});
+  box.addEventListener('touchend',function(){if(tt)clearTimeout(tt);tt=setTimeout(function(){box.__touch=false;lyr.cur=-2;},2500);},{passive:true});
+}
+
 /* ---------- Now Playing sheet ---------- */
 var sheet=null,sheetOpen=false,loop=null,lastPlay=null,lastArt='',scrubbing=false,volDrag=false;
 function act(id){var b=byId(id);if(b)b.click();}
@@ -443,14 +573,17 @@ function buildSheet(){
     +'<div class="spo-grab"></div>'
     +'<div class="spo-head"><button class="spo-ib" id="spo-close" aria-label="Close">'+I.down+'</button><div class="spo-head-t">Now Playing</div><button class="spo-ib" id="spo-share" aria-label="Share">'+I.share+'</button></div>'
     +'<div class="spo-art-wrap"><img id="spo-art" alt=""></div>'
+    +'<div class="spo-lyr" id="spo-lyr"></div>'
     +'<div class="spo-ctl">'
     +'<div class="spo-meta"><div class="spo-meta-t"><div class="spo-title" id="spo-title"></div><div class="spo-artist" id="spo-artist"></div></div><button class="spo-ib" id="spo-like" aria-label="Like">'+I.heart+'</button></div>'
     +'<div class="spo-scrub" id="spo-scrub"><div class="spo-bar"><div class="spo-fill" id="spo-fill"></div></div><div class="spo-times"><span id="spo-pos">0:00</span><span id="spo-rem">-0:00</span></div></div>'
     +'<div class="spo-transport"><button class="spo-ib spo-sm" id="spo-shuffle" aria-label="Shuffle">'+I.shuffle+'</button><button class="spo-ib spo-md" id="spo-prev" aria-label="Previous">'+I.prev+'</button><button class="spo-ib spo-lg" id="spo-play" aria-label="Play">'+I.play+'</button><button class="spo-ib spo-md" id="spo-next" aria-label="Next">'+I.next+'</button><button class="spo-ib spo-sm" id="spo-repeat" aria-label="Repeat">'+I.repeat+'</button></div>'
+    +'<div class="spo-dev" id="spo-dev"></div>'
     +'<div class="spo-vol"><span>'+I.volLo+'</span><div class="spo-vtrack" id="spo-vol"><div class="spo-vbar"><div class="spo-vfill" id="spo-vfill"></div></div></div><span>'+I.volHi+'</span></div>'
     +'<div class="spo-actions">'
     +'<button class="spo-ib" id="spo-lyrics">'+I.lyrics+'<span>Lyrics</span></button>'
     +'<button class="spo-ib" id="spo-queue">'+I.queue+'<span>Queue</span></button>'
+    +'<button class="spo-ib" id="spo-devices">'+I.dev+'<span>Devices</span></button>'
     +'<button class="spo-ib" id="spo-timer">'+I.moon+'<span>Sleep</span></button>'
     +'<button class="spo-ib" id="spo-dl">'+I.dl+'<span>Save</span></button>'
     +'<button class="spo-ib" id="spo-pip">'+I.pip+'<span>Float</span></button>'
@@ -464,12 +597,17 @@ function buildSheet(){
   byId('spo-next').onclick=function(){act('spl-next');setTimeout(update,300);};
   byId('spo-shuffle').onclick=function(){haptic();act('spl-shuffle');setTimeout(update,250);};
   byId('spo-repeat').onclick=function(){haptic();act('spl-repeat');setTimeout(update,250);};
-  byId('spo-lyrics').onclick=function(){closeSheet();setTimeout(function(){act('spl-lyrics');},280);};
+  byId('spo-lyrics').onclick=function(){
+    haptic();
+    if(window.__spoLrc===false){closeSheet();setTimeout(function(){act('spl-lyrics');},280);return;}
+    toggleLyr();
+  };
+  byId('spo-devices').onclick=function(){haptic();closeSheet();setTimeout(window.spoOpenDevices,280);};
   byId('spo-queue').onclick=function(){closeSheet();setTimeout(function(){act('spl-queue');},280);};
   byId('spo-timer').onclick=function(){act('spl-timer');};
   byId('spo-dl').onclick=function(){haptic();act('spl-download');};
   byId('spo-pip').onclick=function(){closeSheet();setTimeout(function(){act('spl-pip');},300);};
-  bindScrub();bindVol();bindDrag();
+  bindScrub();bindVol();bindDrag();bindLyr();
 }
 function rangeMax(){var rg=qs('[data-testid="playback-progressbar"] input[type=range]');return parseInt(rg?rg.getAttribute('max'):0,10)||0;}
 function progressPct(){
@@ -526,6 +664,7 @@ function bindDrag(){
   var inner=sheet.querySelector('.spo-in');
   sheet.addEventListener('touchstart',function(e){
     if(e.target.closest('.spo-scrub,.spo-vtrack'))return;
+    if(e.target.closest('.spo-lyr')&&byId('spo-lyr').scrollTop>0)return;
     if(inner.scrollTop>0)return;
     on=true;sy=e.touches[0].clientY;dy=0;t0=Date.now();
   },{passive:true});
@@ -563,7 +702,11 @@ function update(){
   var rb=byId('spo-repeat');rb.classList.toggle('on',rOn);rb.classList.toggle('off',!!(rp&&rp.classList.contains('spl-disabled')));
   if(rb.__one!==rOne){rb.__one=rOne;rb.innerHTML=rOne?I.repeat1:I.repeat;}
   var tm=byId('spl-timer');byId('spo-timer').classList.toggle('on',!!(tm&&tm.classList.contains('spl-active'))||!!window.__spoEos);
-  var ly=byId('spl-lyrics');byId('spo-lyrics').classList.toggle('off',!ly||ly.style.display==='none'||ly.classList.contains('spl-disabled'));
+  var ly=byId('spl-lyrics');byId('spo-lyrics').classList.toggle('off',window.__spoLrc===false&&(!ly||ly.style.display==='none'||ly.classList.contains('spl-disabled')));
+  var dv=otherDevice(),de=byId('spo-dev');
+  if(de.textContent!==dv)de.textContent=dv;
+  de.classList.toggle('show',!!dv);
+  if(sheet.classList.contains('lyr')){lyrLoad();lyrTick();}
   if(!scrubbing){
     var dur=secs(txt(qs('[data-testid="playback-duration"]')));
     var pos=secs(txt(qs('[data-testid="playback-position"]')));
@@ -648,6 +791,42 @@ window.spoShare=function(){
   },true);
 })();
 
+/* ---------- one tap plays a song, like the app ----------
+   Spotify Web only selects a row on a single click and plays on double click,
+   and its row play button only shows on hover, so on a phone tapping a song
+   often did nothing. A tap on a song row now plays it; buttons in the row
+   (like, more, download) keep working, and long-press still opens the menu. */
+(function(){
+  if(window.__spoTapPlay)return;window.__spoTapPlay=true;
+  var lastRow=null,lastAt=0;
+  function rowPlayButton(row){
+    var c=row.querySelector('[aria-colindex="1"]')||row.firstElementChild;
+    return c?c.querySelector('button'):null;
+  }
+  document.addEventListener('click',function(e){
+    if(e.defaultPrevented||!e.isTrusted||window.__spoTapPlayOff)return;
+    var row=e.target.closest&&e.target.closest('[data-testid=tracklist-row]');
+    if(!row)return;
+    if(e.target.closest('button,input,label,[role=checkbox],[data-testid=add-to-playlist-button]'))return;
+    if(row.closest('[data-tippy-root],[role=dialog]'))return;
+    e.preventDefault();e.stopPropagation();
+    var now=Date.now();
+    if(row===lastRow&&now-lastAt<600)return;
+    lastRow=row;lastAt=now;
+    haptic();
+    var before=txt(byId('spl-track'));
+    var title=txt(row.querySelector('a[href*="/track/"],a[href*="/episode/"]')||row.querySelector('[dir=auto]'));
+    row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,view:window,detail:2}));
+    /* fallback only when nothing changed at all, so it can never pause a song */
+    setTimeout(function(){
+      if(!row.isConnected)return;
+      var cur=txt(byId('spl-track'));
+      if(cur!==before||(title&&cur===title))return;
+      var b=rowPlayButton(row);if(b)b.click();
+    },1200);
+  },true);
+})();
+
 /* ---------- back button ---------- */
 window.spoBack=function(){
   if(sheetOpen){closeSheet();return true;}
@@ -657,6 +836,11 @@ window.spoBack=function(){
     return true;
   }
   if(libOpen()){toggleLib();return true;}
+  var rc=byId('Desktop_PanelContainer_Id');
+  if(rc&&rc.parentNode&&rc.parentNode.parentNode&&rc.parentNode.parentNode.getAttribute('aria-hidden')==='false'){
+    var cb=qs('#Desktop_PanelContainer_Id [data-testid="PanelHeader_CloseButton"] button')||qs('#Desktop_PanelContainer_Id [data-testid="PanelHeader_CloseButton"]');
+    if(cb){window.__spoPanelHold=0;cb.click();return true;}
+  }
   return false;
 };
 

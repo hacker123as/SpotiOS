@@ -382,7 +382,7 @@ class SpotifyWebViewClient(
             if (playerMode == "spotilol") {
                 append(SpotilolPlayer.CONTENT)
             }
-            append(SpotiOSUi.content(prefs.getBoolean("SpoTabBar", true), prefs.getBoolean("SpoArtWall", true)))
+            append(SpotiOSUi.content(prefs.getBoolean("SpoTabBar", true), prefs.getBoolean("SpoArtWall", true), prefs.getBoolean("SpoLrc", true)))
         }
         val cleanJs = JsUtils.stripConsoleLogs(js) + "\n" +
                 buildAmoledJs(amoledEnabled) + "\n" +
@@ -435,6 +435,10 @@ class SpotifyWebViewClient(
                     wv.evaluateJavascript(LiquidGlassTheme.buildJs(wv.context), null)
                 "PaletteSeed", "MaterialYou" ->
                     wv.evaluateJavascript(AccentTheme.buildAccentJs(wv.context), null)
+                "SpoLrc" -> {
+                    val on = prefs.getBoolean("SpoLrc", true)
+                    wv.evaluateJavascript("window.__spoLrc=$on;", null)
+                }
                 "SpoArtWall" -> {
                     val on = prefs.getBoolean("SpoArtWall", true)
                     wv.evaluateJavascript("if(window.spoSetArtWall) window.spoSetArtWall($on);", null)

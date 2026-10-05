@@ -37,6 +37,9 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     }
 
     private val activityRef = activityRef
+
+    /** Runs JS in the Spotify WebView; set by MainActivity. */
+    var onJs: ((String) -> Unit)? = null
     var onLoginDetected: (() -> Unit)? = null
     var onPlayLoaded: (() -> Unit)? = null
     var onMediaStatus: ((String) -> Unit)? = null
@@ -276,6 +279,17 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     fun skipDownload() {
         Logger.i(CALL, "skipDownload")
         DownloadManager.skipCurrent()
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun lyricsLookup(reqId: String, artist: String, title: String, durationSec: Double) {
+        Logger.i(CALL, "lyricsLookup ${title.take(60)}")
+        Thread {
+            val result = com.project.lol.lyrics.LrcLib.lookup(artist, title, durationSec)
+            val js = "window.spoLyricsResult&&window.spoLyricsResult(${JSONObject.quote(reqId)},$result)"
+            activityRef.get()?.runOnUiThread { onJs?.invoke(js) }
+        }.apply { isDaemon = true }.start()
     }
 
     @Suppress("unused")

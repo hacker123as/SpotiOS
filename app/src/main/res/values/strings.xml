@@ -63,6 +63,8 @@
     <string name="settings_spo_art_wallpaper_subtitle">Blur the playing song\'s cover behind the whole app</string>
     <string name="settings_spo_haptics">Haptic Feedback</string>
     <string name="settings_spo_haptics_subtitle">Small taps when you press tabs and player buttons</string>
+    <string name="settings_spo_lyrics">Lyrics for Every Song</string>
+    <string name="settings_spo_lyrics_subtitle">Synced lyrics from LRCLIB in Now Playing, even when Spotify has none</string>
     <string name="settings_auto_offline_library">Offline Library When No Internet</string>
     <string name="settings_auto_offline_library_subtitle">Open your downloaded songs automatically if you launch offline</string>
     <string name="main_timer_end_of_song">End of song</string>
@@ -94,8 +96,8 @@
     <string name="settings_lyrics_style_compact">Compact</string>
     <string name="settings_lyrics_style_karaoke">Karaoke</string>
     <string name="settings_lyrics_style_bold">Bold Large</string>
-    <string name="settings_take_control">Take Player Control</string>
-    <string name="settings_take_control_subtitle">Auto accept the Take Control prompt</string>
+    <string name="settings_take_control">Play Here on Launch</string>
+    <string name="settings_take_control_subtitle">When the app opens, move playback to this phone once. Other devices can still take over after that.</string>
     <string name="settings_android_auto">Android Auto Controls</string>
     <string name="settings_android_auto_subtitle">Media metadata for notifications</string>
     <string name="settings_close_now_playing">Always Close Now Playing</string>
