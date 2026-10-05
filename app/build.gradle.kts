@@ -25,8 +25,8 @@ android {
         applicationId = "com.spotios.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2101
-        versionName = "2.10.1"
+        versionCode = 2110
+        versionName = "2.11.0"
         buildConfigField("int", "CI_BUILD", ciBuild.toString())
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -106,6 +106,8 @@ dependencies {
     // Glance (home screen widgets)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    // Server Mode watchdog. Glance already brings this version in.
+    implementation("androidx.work:work-runtime:2.7.1")
 
     // Ktor + serialization (YouTube InnerTube client)
     implementation(libs.ktor.client.core)

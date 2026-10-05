@@ -91,6 +91,13 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         return ServerMode.statusJson(ctx)
     }
 
+    /** Read at document start, before the Server screen loads (ConnectKeepAlive keeps the page visible). */
+    @JavascriptInterface
+    fun isServerMode(): Boolean {
+        val ctx = appContext() ?: return false
+        return ServerMode.isOn(ctx)
+    }
+
     @JavascriptInterface
     fun setServerMode(on: Boolean) {
         val ctx = appContext() ?: return

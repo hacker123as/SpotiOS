@@ -1043,20 +1043,45 @@ function closeSheet(){
 window.spoOpenPlayer=openSheet;
 window.spoClosePlayer=closeSheet;
 
-/* ---------- our own Queue and Play-on panels (Spotify Web API, the player's own login) ---------- */
+/* ---------- our own Queue and Play-on panels ----------
+   Devices, transfers and volume go through Spotify's own Connect API (window.spoCS, from
+   ConnectKeepAlive), like the web player's device picker; the public Web API, which Spotify
+   rate-limits for the web player, is only a fallback (and still serves the queue). */
 var pan={k:'',req:0,busy:false,t:null,key:'',n:0};
+var apiUntil=0;
 function api(path,opt){
   var tok=window.spotAuthToken;
   if(!tok)return Promise.reject(new Error('signin'));
   if(navigator.onLine===false)return Promise.reject(new Error('offline'));
+  if(Date.now()<apiUntil)return Promise.reject(new Error('http429'));
   opt=opt||{};
   var f=window.oriFetch||window.fetch;
   return f('https://api.spotify.com/v1'+path,{method:opt.method||'GET',headers:{'Authorization':tok,'Content-Type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined})
     .then(function(r){
+      if(r.status===429){var ra=0;try{ra=+r.headers.get('retry-after')||0;}catch(e){}apiUntil=Date.now()+Math.min(600,Math.max(30,ra||60))*1000;throw new Error('http429');}
       if(r.status===204||r.status===202)return null;
       if(!r.ok)throw new Error('http'+r.status);
       return r.text().then(function(t){try{return t?JSON.parse(t):null;}catch(e){return null;}});
     });
+}
+function csTry(fn,fallback){
+  var cs=window.spoCS;
+  if(!cs||!window.spotAuthToken)return fallback();
+  return Promise.resolve().then(function(){return fn(cs);}).catch(function(){return fallback();});
+}
+function clusterDevices(cl){
+  var ds=(cl&&cl.devices)||{},out=[];
+  for(var k in ds){
+    var d=ds[k]||{},id=d.device_id||k,caps=d.capabilities||{};
+    out.push({id:id,name:d.name||'',type:d.device_type||'',is_active:id===cl.active_device_id,
+      volume_percent:d.volume!=null?Math.round(d.volume/655.35):null,supports_volume:caps.disable_volume!==true,is_restricted:false});
+  }
+  return {devices:out};
+}
+function loadDevices(){
+  var c=window.__spoConn;
+  if(c&&c.cluster&&c.clusterAt&&Date.now()-c.clusterAt<60000)return Promise.resolve(clusterDevices(c.cluster));
+  return csTry(function(cs){return cs.cluster().then(function(cl){if(!cl)throw new Error('none');return clusterDevices(cl);});},function(){return api('/me/player/devices');});
 }
 function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';});}
 function itemArt(it){var im=it&&((it.album&&it.album.images)||it.images||(it.show&&it.show.images));if(!im||!im.length)return '';var x=im[1]||im[0];return x&&x.url||'';}
@@ -1082,11 +1107,11 @@ function devType(t){
 function myName(){return window.__spoDeviceName||'SpotiOS';}
 /* __spoMyId comes from this player's own registration (ConnectKeepAlive); spotDevId can end
    up holding the other device's id after a transfer, so it is only a fallback. */
-function isMine(d){var me=window.__spoMyId||window.spotDevId;return !!d&&((me&&d.id===me)||d.name===myName());}
+function isMine(d){var me=(window.spoCS&&window.spoCS.id())||window.__spoMyId||window.spotDevId;return !!d&&((me&&d.id===me)||d.name===myName());}
 function panMsg(h){var b=byId('spo-pan-b');if(b)b.innerHTML='<div class="spo-pan-msg">'+h+'</div>';}
 function panFail(k,e){
   var m=String(e&&e.message||'');
-  var why=m==='offline'?'You’re offline.':(m==='signin'?'Log in to Spotify to see this.':(m==='http429'?'Spotify is busy right now.':'Couldn’t reach Spotify.'));
+  var why=m==='offline'?'You’re offline.':(m==='signin'?'Log in to Spotify to see this.':(m==='http429'?'Spotify asked SpotiOS to slow down. Try again in a minute.':'Couldn’t reach Spotify.'));
   panMsg(why+'<br><button type="button" data-p="retry">Try again</button><button type="button" data-p="sp'+k+'">Open Spotify’s '+(k==='queue'?'queue':'device list')+'</button>');
 }
 function panQueue(quiet){
@@ -1109,9 +1134,9 @@ function panQueue(quiet){
 function panDevices(quiet){
   var id=++pan.req;
   if(!quiet)panMsg('Looking for devices…');
-  api('/me/player/devices').then(function(j){
+  loadDevices().then(function(j){
     if(id!==pan.req||pan.k!=='dev')return;
-    var ds=(j&&j.devices)||[],mine=null,act=null,h='';
+    var ds=((j&&j.devices)||[]).map(function(d){d.type=String(d.type||'').toLowerCase();return d;}),mine=null,act=null,h='';
     ds.forEach(function(d){if(!mine&&isMine(d))mine=d;if(d.is_active)act=d;});
     var here=!act||(mine&&act.id===mine.id);
     h+='<div class="spo-pan-sec">'+(act?'Listening on':'Nothing playing')+'</div>';
@@ -1150,7 +1175,7 @@ function openPan(k){
     if(!sheetOpen||!pan.k||document.hidden||pan.busy)return;
     var k2=trackKey();
     if(k2!==pan.key){pan.key=k2;panRefresh(true);}
-    else if(pan.k==='dev'||(++pan.n)%3===0)panRefresh(true);
+    else if((++pan.n)%3===0)panRefresh(true);
   },5000);
 }
 function closePan(){
@@ -1174,7 +1199,7 @@ function playOn(id,row){
   haptic();
   if(id==='@me'){closeSheet();setTimeout(window.spoOpenDevices,280);return;}
   if(row)row.classList.add('busy');
-  api('/me/player',{method:'PUT',body:{device_ids:[id],play:true}})
+  csTry(function(cs){return cs.transfer(id,'resume');},function(){return api('/me/player',{method:'PUT',body:{device_ids:[id],play:true}});})
     .then(function(){setTimeout(function(){panRefresh(true);update();},1100);})
     .catch(function(e){if(row)row.classList.remove('busy');panFail('dev',e);});
 }
@@ -1193,7 +1218,10 @@ function bindPan(){
   b.addEventListener('input',function(e){
     var v=e.target.closest('input[data-v]');if(!v)return;
     if(vt)clearTimeout(vt);
-    vt=setTimeout(function(){api('/me/player/volume?volume_percent='+(+v.value)+'&device_id='+encodeURIComponent(v.getAttribute('data-v')),{method:'PUT'}).catch(function(){});},220);
+    vt=setTimeout(function(){
+      var did=v.getAttribute('data-v'),pc=+v.value;
+      csTry(function(cs){return cs.volume(did,pc/100);},function(){return api('/me/player/volume?volume_percent='+pc+'&device_id='+encodeURIComponent(did),{method:'PUT'});}).catch(function(){});
+    },220);
   });
 }
 

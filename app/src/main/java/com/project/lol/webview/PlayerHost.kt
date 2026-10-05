@@ -210,8 +210,24 @@ object PlayerHost {
         bridge?.attach(null)
         owner = null
         applyPriority(activity.applicationContext)
+        Handler(Looper.getMainLooper()).postDelayed({ keepVisible() }, 300L)
         Logger.i(TAG, "screen closed, player keeps running for server mode")
         return true
+    }
+
+    /**
+     * Server Mode: tells the player it is on screen even while it isn't (screen off, SpotiOS
+     * in the background or closed), so Chromium doesn't throttle the page that holds the
+     * Spotify Connect session. Android marks the view hidden again whenever its window hides,
+     * so the media service re-applies this on every keepalive tick.
+     */
+    fun keepVisible() {
+        val wv = webView ?: return
+        try {
+            wv.onResume()
+            wv.resumeTimers()
+            wv.dispatchWindowVisibilityChanged(View.VISIBLE)
+        } catch (_: Exception) {}
     }
 
     /** Drops our references to [wv] after the caller destroyed it (or its renderer died). */

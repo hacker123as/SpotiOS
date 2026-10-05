@@ -26,6 +26,9 @@ object FetchOverride {
                         }
                     }
                     var url = typeof input==='string' ? input : (input ? input.url : '');
+                    // Connect requests below go out natively, past ConnectKeepAlive's fetch
+                    // wrapper, so hand it what it learns from them (host, headers, device id).
+                    try { if(url && window.__spoConn && window.__spoConn.learn && (url.indexOf('/connect-state/') !== -1 || url.indexOf('/track-playback/') !== -1)) window.__spoConn.learn(url, init); } catch(e){}
                     // Show up as "SpotiOS" (or the name picked in Settings) in Spotify Connect
                     // on other devices, instead of "Web Player (Chrome)".
                     if(url && url.indexOf && url.indexOf('/track-playback/v1/devices') !== -1 && init && typeof init.body === 'string') {

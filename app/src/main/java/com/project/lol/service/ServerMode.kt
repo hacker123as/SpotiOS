@@ -46,7 +46,10 @@ object ServerMode {
             .putBoolean(KEY, on)
             .putBoolean(KEY_MODE_ASKED, true)
             .apply()
-        if (!on) cancelNotice(context)
+        if (on) ServerWatchdog.schedule(context) else {
+            cancelNotice(context)
+            ServerWatchdog.cancel(context)
+        }
     }
 
     fun startWithSpotify(context: Context): Boolean =
@@ -82,13 +85,11 @@ object ServerMode {
      */
     fun startInBackground(context: Context, reason: String) {
         if (!isOn(context)) return
-        if (MediaNotificationService.instance != null) {
-            if (reason == "spotify") {
-                ContextCompat.startForegroundService(
-                    context,
-                    Intent(context, MediaNotificationService::class.java).setAction(MediaNotificationService.ACTION_SPOTIFY_SEEN)
-                )
-            }
+        val running = MediaNotificationService.instance
+        if (running != null) {
+            // Same process: tell the running service directly (a service start from the
+            // background can be refused).
+            if (reason == "spotify") running.onSpotifySeen()
             return
         }
         if (!isLoggedIn(context)) {
@@ -123,6 +124,7 @@ object ServerMode {
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(pi)
+            .setOnlyAlertOnce(true)
             .setAutoCancel(true)
             .build()
         runCatching { nm.notify(NOTICE_ID, n) }

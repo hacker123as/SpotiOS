@@ -16,6 +16,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.util.Rational
 import android.widget.Toast
 import android.view.LayoutInflater
@@ -1402,6 +1404,8 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
                 if(typeof cssint !== 'undefined' && cssint) { clearInterval(cssint); cssint = null; window.__splWasCssint = true; }
             } catch(e) {}
         """.trimIndent(), null)
+        // Server Mode: Android just marked the player hidden; keep the Connect page running at full speed.
+        if (ServerMode.isOn(this)) Handler(Looper.getMainLooper()).postDelayed({ PlayerHost.keepVisible() }, 400L)
     }
 
     override fun onResume() {

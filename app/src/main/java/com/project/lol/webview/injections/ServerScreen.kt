@@ -9,12 +9,16 @@ import org.json.JSONObject
  * how to connect to it, and lets you play something on SpotiOS (recent songs, playlists,
  * liked songs, search). It also runs Server Mode's device rules:
  *  - the default device: the first device that sends music to SpotiOS is remembered, and
- *    when it starts playing on its own, SpotiOS takes the music over (auto-connect);
+ *    when it starts playing on its own, SpotiOS takes the music over (take-over), unless you
+ *    just moved the music from SpotiOS to it;
  *  - who may play here: everyone on the account, or only allowed devices. Spotify has no
  *    way to refuse a connection, so music sent from a blocked device is sent straight back.
  *
- * Connect state comes from ConnectKeepAlive (window.__spoConn) and the Spotify Web API with
- * the player's own login. Settings live in localStorage ("spoSrv").
+ * Connect state comes from ConnectKeepAlive (window.__spoConn), and everything here talks to
+ * Spotify the way the web player itself does (Connect commands through window.spoCS, lists and
+ * search through Spotify's GraphQL API), because the public Web API rate-limits the web player
+ * and answered "too many requests" all the time. The Web API is only a fallback.
+ * Settings live in localStorage ("spoSrv").
  */
 object ServerScreen {
 
@@ -141,6 +145,7 @@ html.ss-on [data-tippy-root]{visibility:hidden!important}
 .ss-it{display:flex;align-items:center;gap:12px;padding:7px 6px;margin:0 -6px;border-radius:12px;transition:background .18s,transform .3s var(--ss-spring)}
 .ss-it:active{background:rgba(255,255,255,.07);transform:scale(.98)}
 .ss-it img,.ss-it .ss-ph{width:46px;height:46px;border-radius:7px;object-fit:cover;background:rgba(255,255,255,.08);flex:none}
+.ss-it img.rnd{border-radius:50%}
 .ss-ph{display:flex;align-items:center;justify-content:center;color:var(--ss-ink3)}
 .ss-ph.lk{background:linear-gradient(135deg,#450af5,#8e8ee5);color:#fff}
 .ss-it .ss-tx b{font-size:14.5px;font-weight:550}
@@ -175,14 +180,22 @@ html.ss-on [data-tippy-root]{visibility:hidden!important}
 #ss-sheet .ss-row.cur .ss-tx b{color:var(--ss-acc)}
 #ss-sheet .ss-chk{width:22px;height:22px;color:var(--ss-acc);opacity:0}
 #ss-sheet .ss-row.cur .ss-chk{opacity:1}
+#ss-sheet .ss-row.dng .ss-tx b{color:#ff6961}
+#ss-sheet .ss-row:active{opacity:.6}
 #ss-toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);z-index:2147483647;transform:translate(-50%,-14px);opacity:0;pointer-events:none;
   padding:10px 16px;border-radius:999px;background:rgba(40,40,44,.94);border:1px solid var(--ss-rim);font:600 13.5px/1.3 -apple-system,Roboto,sans-serif;color:#fff;
   box-shadow:0 10px 30px rgba(0,0,0,.4);transition:opacity .25s,transform .4s cubic-bezier(.34,1.56,.64,1);max-width:86vw;text-align:center}
 #ss-toast.show{opacity:1;transform:translate(-50%,0)}
-#ss-pill{position:fixed;right:14px;bottom:calc(var(--spo-dock,110px) + 10px);z-index:2147483645;display:none;align-items:center;gap:8px;padding:9px 14px 9px 12px;
-  border-radius:999px;background:rgba(20,20,22,.82);border:1px solid rgba(30,215,96,.35);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);
-  font:700 13px/1 -apple-system,Roboto,sans-serif;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.4)}
-#ss-pill.show{display:flex}
+#ss-back{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;z-index:2147483645;display:none;align-items:center;gap:8px;height:36px;padding:0 15px 0 12px;
+  border-radius:999px;background:rgba(20,20,22,.8);border:1px solid rgba(30,215,96,.4);-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);
+  font:700 13.5px/1 -apple-system,"SF Pro Text",Roboto,sans-serif;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+#ss-back:active{transform:scale(.92)}
+#ss-back.show{display:flex}
+html.ss-on #ss-back{display:none}
+#ss-back .ss-dot{width:8px;height:8px}
+#ss-tab{position:relative}
+#ss-tab .ss-tab-dot{position:absolute;top:9px;left:calc(50% + 6px);width:7px;height:7px;border-radius:50%;background:var(--ss-acc);box-shadow:0 0 0 2px rgba(24,24,30,.9)}
+#ss-tab svg{fill:none}
 @media (min-width:700px) and (orientation:landscape){
   .ss-scroll{display:grid;grid-template-columns:minmax(300px,1fr) minmax(320px,1.1fr);column-gap:22px;align-items:start}
   .ss-np{grid-row:1/span 9;position:sticky;top:0}
@@ -207,7 +220,8 @@ var I={
   play:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>',
   pause:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm7 0h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/></svg>',
   prev:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1zm13.4.6a1 1 0 0 1 .6.9v11a1 1 0 0 1-1.6.8l-8-5.5a1 1 0 0 1 0-1.6l8-5.5a1 1 0 0 1 1-.1z"/></svg>',
-  next:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1zM4.6 5.6a1 1 0 0 1 1 .1l8 5.5a1 1 0 0 1 0 1.6l-8 5.5A1 1 0 0 1 4 17.5v-11a1 1 0 0 1 .6-.9z"/></svg>'
+  next:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M18 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1zM4.6 5.6a1 1 0 0 1 1 .1l8 5.5a1 1 0 0 1 0 1.6l-8 5.5A1 1 0 0 1 4 17.5v-11a1 1 0 0 1 .6-.9z"/></svg>',
+  more:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M5 10.25a1.75 1.75 0 1 1 0 3.5a1.75 1.75 0 0 1 0-3.5zm7 0a1.75 1.75 0 1 1 0 3.5a1.75 1.75 0 0 1 0-3.5zm7 0a1.75 1.75 0 1 1 0 3.5a1.75 1.75 0 0 1 0-3.5z"/></svg>'
 };
 function st_(d){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+d+'"/></svg>';}
 var P={
@@ -221,7 +235,6 @@ var P={
   speaker:'M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM12 17a3 3 0 1 0 0-6a3 3 0 0 0 0 6zM12 7v.01',
   check:'M5 12l5 5L20 7',power:'M7 6a7.75 7.75 0 1 0 10 0M12 4v8',
   battery:'M6 7h11a2 2 0 0 1 2 2v.5h1v5h-1v.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z',
-  bell:'M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6M9 17v1a3 3 0 0 0 6 0v-1',
   refresh:'M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4',
   star:'M12 17.75l-6.17 3.24 1.18-6.87-5-4.86 6.9-1L12 2l3.09 6.26 6.9 1-5 4.86 1.18 6.87z',
   shield:'M12 3a12 12 0 0 0 8.5 3A12 12 0 0 1 12 21 12 12 0 0 1 3.5 6 12 12 0 0 0 12 3M9 12l2 2 4-4',
@@ -230,7 +243,8 @@ var P={
   heart:'M19.5 12.57L12 20l-7.5-7.43A5 5 0 1 1 12 6.01a5 5 0 1 1 7.5 6.57',music:'M6 20a3 3 0 1 0 0-6a3 3 0 0 0 0 6zM16 18a3 3 0 1 0 0-6a3 3 0 0 0 0 6zM9 17V5l10-2v12',
   settings:'M10.3 4.3c.4-1.8 3-1.8 3.4 0a1.7 1.7 0 0 0 2.6 1.1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 0 0 1 2.5c1.8.5 1.8 3 0 3.5a1.7 1.7 0 0 0-1 2.6c.9 1.5-.9 3.3-2.4 2.3a1.7 1.7 0 0 0-2.6 1.1c-.4 1.8-3 1.8-3.4 0a1.7 1.7 0 0 0-2.6-1.1c-1.5.9-3.3-.8-2.4-2.3a1.7 1.7 0 0 0-1-2.6c-1.8-.4-1.8-3 0-3.4a1.7 1.7 0 0 0 1-2.6c-.9-1.6.9-3.3 2.4-2.4a1.7 1.7 0 0 0 2.6-1.1zM12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6z',
   history:'M12 8v4l2 2M3.05 11a9 9 0 1 1 .5 4M3 20v-5h5',list:'M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01',
-  block:'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM5.7 5.7l12.6 12.6',link:'M9 15l6-6M11 6l.46-.54a5 5 0 0 1 7.07 7.07L18 13M13 18l-.4.53a5.07 5.07 0 0 1-7.12 0a4.97 4.97 0 0 1 0-7.07L6 11'
+  block:'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM5.7 5.7l12.6 12.6',
+  takeover:'M4 12a8 8 0 0 1 13.66-5.66L20 8.7M20 4v4.7h-4.7M20 12a8 8 0 0 1-13.66 5.66L4 15.3M4 20v-4.7h4.7'
 };
 function ic(n){return P[n]?st_(P[n]):(I[n]||'');}
 function devIc(t){t=String(t||'').toLowerCase();
@@ -249,30 +263,147 @@ if(cfg.auto===undefined)cfg.auto=true;
 if(cfg.policy!=='list')cfg.policy='all';
 cfg.devs=cfg.devs&&typeof cfg.devs==='object'?cfg.devs:{};
 cfg.log=Array.isArray(cfg.log)?cfg.log:[];
+/* 2.10 saved SpotiOS itself as a device (it couldn't tell its own id apart): drop it. */
+(function(){for(var k in cfg.devs){var e=cfg.devs[k];if(e&&e.name===(W.__spoDeviceName||'SpotiOS')&&normType(e.type)==='computer')delete cfg.devs[k];}
+  if(cfg.def&&cfg.def.name===(W.__spoDeviceName||'SpotiOS')&&normType(cfg.def.type)==='computer')cfg.def=null;})();
 function save(){try{localStorage.setItem(LS,JSON.stringify(cfg));}catch(e){}}
 function log(m,k){cfg.log.unshift({t:now(),m:m,k:k||''});if(cfg.log.length>30)cfg.log.length=30;save();if(shown)renderLog();}
 
-/* ---------- Spotify Web API with the player's own login ---------- */
+/* ---------- talking to Spotify ---------- */
+function err(code,status){var e=new Error(code);e.status=status||0;return e;}
+function why(e){var m=String(e&&e.message||'');
+  if(m==='offline')return 'You’re offline.';
+  if(m==='signin')return 'Spotify is still signing in.';
+  if(m==='noid')return 'SpotiOS is still joining Spotify Connect. Try again in a few seconds.';
+  if(m==='http429'||m==='busy')return 'Spotify asked SpotiOS to slow down. Try again in a minute.';
+  if(m==='http403')return 'Spotify didn’t allow that. Playing on other devices needs Premium.';
+  if(m==='http404'||m==='http410')return 'Spotify couldn’t find that device. Tap Reconnect, then try again.';
+  if(m==='nohash')return 'Spotify changed something on its side. Try again later.';
+  return 'Couldn’t reach Spotify. Check the connection and try again.';}
+function quiet(e){var m=String(e&&e.message||'');return m==='offline'||m==='signin';}
+/* Spotify's own Connect API, the one the web player uses (ConnectKeepAlive's window.spoCS). */
+function csCall(fn){return Promise.resolve().then(function(){var c=W.spoCS;if(!c)throw err('noid');return fn(c);});}
+/* The public Web API is only a fallback: Spotify rate-limits the web player's key there. */
+var apiUntil=0;
 function api(path,opt){
   var tok=W.spotAuthToken;
-  if(!tok)return Promise.reject(new Error('signin'));
-  if(navigator.onLine===false)return Promise.reject(new Error('offline'));
+  if(!tok)return Promise.reject(err('signin'));
+  if(navigator.onLine===false)return Promise.reject(err('offline'));
+  if(now()<apiUntil)return Promise.reject(err('busy'));
   opt=opt||{};
   var f=W.oriFetch||W.fetch;
   return f('https://api.spotify.com/v1'+path,{method:opt.method||'GET',headers:{'Authorization':tok,'Content-Type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined})
     .then(function(r){
+      if(r.status===429){var ra=0;try{ra=+r.headers.get('retry-after')||0;}catch(e){}apiUntil=now()+Math.min(600,Math.max(30,ra||60))*1000;throw err('http429',429);}
       if(r.status===204||r.status===202)return null;
-      if(!r.ok)throw new Error('http'+r.status);
+      if(!r.ok)throw err('http'+r.status,r.status);
       return r.text().then(function(t){try{return t?JSON.parse(t):null;}catch(e){return null;}});
     });
 }
-function why(e){var m=String(e&&e.message||'');
-  return m==='offline'?'You’re offline.':m==='signin'?'Spotify is still signing in.':m==='http429'?'Spotify is busy, try again in a moment.':m==='http403'?'Spotify didn’t allow that (Premium may be needed).':m==='http404'?'Spotify couldn’t find SpotiOS yet. Give it a few seconds.':'Couldn’t reach Spotify.';}
+function either(main,fallback){
+  return main().catch(function(e){if(quiet(e))throw e;return fallback().catch(function(){throw e;});});
+}
+var GQ={searchTracks:'b02683192a98dde7966b5e6655a79eeb62713eab703eda9902c932818dd52751',
+  fetchLibraryTracks:'087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240',
+  libraryV3:'390c78e5b951029bad359785e69b07b536a509c581cbcd0aded5e5067f187455',
+  fetchEntitiesForRecentlyPlayed:'cf5d2e94ffd82788470788ae1f6090cc3e9e774fb8fd383580634c6e6f50f7be',
+  profileAttributes:'08ffb4730af3746e04a8301396f20875dbbce10c75243803091a9274eacc8ac0'};
+var gqFound={},gqScan=null;
+function gqHash(op){
+  var h=gqFound[op]||'';
+  if(!h)try{h=(W.splOpHashes||{})[op]||'';}catch(e){}
+  if(!h)try{h=localStorage.getItem('sp_hash_'+op)||'';}catch(e){}
+  return h||GQ[op]||'';
+}
+function gqLearn(t){
+  var re=/"([A-Za-z0-9]+)","query","([0-9a-f]{64})"/g,m;
+  while((m=re.exec(t))){if(GQ[m[1]]!==undefined){gqFound[m[1]]=m[2];try{localStorage.setItem('sp_hash_'+m[1],m[2]);}catch(e){}}}
+}
+/* Spotify renames its queries now and then: read the current ones from its own scripts. */
+function gqDiscover(){
+  if(gqScan)return gqScan;
+  var f=W.oriFetch||W.fetch;
+  gqScan=Promise.resolve().then(function(){
+    var ss=document.querySelectorAll('script[src]'),main='';
+    for(var i=0;i<ss.length;i++){var s=ss[i].src||'';if(/\/web-player\.[0-9a-f]+\.js/.test(s))main=s;}
+    if(!main)return;
+    return f(main).then(function(r){return r.text();}).then(function(t){
+      gqLearn(t);
+      var m=t.match(/(\d+):"xpui-routes-search"/);if(!m)return;
+      var base=main.slice(0,main.lastIndexOf('/')+1),re=new RegExp('[,{]'+m[1]+':"([0-9a-f]{8})"','g'),hs=[],x;
+      while((x=re.exec(t))&&hs.length<4)if(hs.indexOf(x[1])<0)hs.push(x[1]);
+      var one=function(i){
+        if(i>=hs.length)return;
+        return f(base+'xpui-routes-search.'+hs[i]+'.js').then(function(r){if(!r.ok)throw 0;return r.text();})
+          .then(function(tx){if(tx.indexOf('searchTracks')<0)throw 0;gqLearn(tx);}).catch(function(){return one(i+1);});
+      };
+      return one(0);
+    });
+  }).catch(function(){});
+  return gqScan;
+}
+function spHeaders(json){
+  var h={'Authorization':W.spotAuthToken,'Accept':'application/json','App-Platform':'WebPlayer'};
+  if(json)h['Content-Type']='application/json;charset=UTF-8';
+  if(W.spotCliToken)h['Client-Token']=W.spotCliToken;
+  var c=W.__spoConn;if(c&&c.appVer)h['Spotify-App-Version']=c.appVer;
+  return h;
+}
+function gql(op,vars,retried){
+  if(!W.spotAuthToken)return Promise.reject(err('signin'));
+  if(navigator.onLine===false)return Promise.reject(err('offline'));
+  var hash=gqHash(op),f=W.oriFetch||W.fetch;
+  return f('https://api-partner.spotify.com/pathfinder/v2/query',{method:'POST',headers:spHeaders(true),
+      body:JSON.stringify({variables:vars,operationName:op,extensions:{persistedQuery:{version:1,sha256Hash:hash}}})})
+    .then(function(r){
+      if(r.status===429)throw err('http429',429);
+      return r.text().then(function(t){var j=null;try{j=t?JSON.parse(t):null;}catch(e){}return {r:r,j:j};});
+    }).then(function(x){
+      var j=x.j;
+      if(x.r.ok&&j&&j.data)return j.data;
+      var msg=JSON.stringify((j&&j.errors)||'');
+      if(!retried&&(/persisted/i.test(msg)||x.r.status===400||x.r.status===404)){
+        delete gqFound[op];try{localStorage.removeItem('sp_hash_'+op);}catch(e){}
+        gqScan=null;
+        return gqDiscover().then(function(){if(gqHash(op)===hash)throw err('nohash');return gql(op,vars,true);});
+      }
+      throw err(x.r.ok?'gql':'http'+x.r.status,x.r.status);
+    });
+}
+/* Spotify's own servers for the web player ("spclient"), with the player's login. */
+function spc(path){
+  if(!W.spotAuthToken)return Promise.reject(err('signin'));
+  if(navigator.onLine===false)return Promise.reject(err('offline'));
+  var c=W.__spoConn||{},base=c.spc||'https://spclient.wg.spotify.com';
+  return (W.oriFetch||W.fetch)(base+path,{headers:spHeaders(false)}).then(function(r){
+    if(r.status===429)throw err('http429',429);
+    if(!r.ok)throw err('http'+r.status,r.status);
+    return r.json();
+  });
+}
+var uidP=null;
+function uid(){
+  if(lib.uid)return Promise.resolve(lib.uid);
+  if(W.spotUserId){lib.uid=W.spotUserId;return Promise.resolve(lib.uid);}
+  if(uidP)return uidP;
+  uidP=gql('profileAttributes',{}).then(function(d){return (d&&d.me&&d.me.profile&&d.me.profile.username)||'';})
+    .catch(function(){return '';})
+    .then(function(u){return u||api('/me').then(function(m){return (m&&m.id)||'';}).catch(function(){return '';});})
+    .then(function(u){uidP=null;if(!u)throw err('signin');lib.uid=u;return u;});
+  return uidP;
+}
 
 /* ---------- who is who ---------- */
-function myId(){var c=W.__spoConn;return (c&&c.myId)||W.__spoMyId||'';}
+function myId(){try{if(W.spoCS)return W.spoCS.id()||'';}catch(e){}return W.__spoMyId||'';}
 function myName(){return W.__spoDeviceName||'SpotiOS';}
-function isMine(d){if(!d)return false;var id=myId();if(id)return d.id===id;return d.name===myName();}
+function isMine(d){
+  if(!d)return false;
+  var id=myId();
+  if(id&&d.id)return d.id===id;
+  var c=W.__spoConn,obs=c&&c.obs;
+  if(obs&&d.id&&d.id.indexOf(obs)===0)return true;
+  return !!d.name&&d.name===myName();
+}
 function same(a,b){if(!a||!b)return false;if(a.id&&b.id&&a.id===b.id)return true;return !!a.name&&a.name===b.name&&normType(a.type)===normType(b.type);}
 function rec(d){return cfg.devs[d.id]||null;}
 function known(d){
@@ -293,39 +424,31 @@ function allowed(d){
   return true;
 }
 
-/* ---------- Connect state: dealer pushes (instant) with Web API polling as backup ---------- */
-var S={active:null,playing:false,devices:[],mineAt:0,snooze:0,pullAt:0,localUntil:0,pollAt:0,devAt:0,bounceAt:0};
+/* ---------- Connect state: pushed by Spotify over the player's own connection ---------- */
+var S={active:null,playing:false,devices:[],mineAt:0,hold:null,pullAt:0,pullUntil:0,fails:0,localUntil:0,pollAt:0,bounceAt:0};
 function fromCluster(c){
   var devs=c.devices||{},list=[];
-  for(var k in devs){var d=devs[k]||{};list.push({id:d.device_id||k,name:d.name||'',type:d.device_type||''});}
+  for(var k in devs){var d=devs[k]||{};list.push({id:d.device_id||k,name:d.name||'',type:d.device_type||'',vol:d.volume});}
   var aid=c.active_device_id||'',a=null;
   for(var i=0;i<list.length;i++)if(list[i].id===aid)a=list[i];
   if(aid&&!a)a={id:aid,name:'',type:''};
   var ps=c.player_state||{};
-  onState(a,!!(ps.is_playing&&!ps.is_paused),list,'dealer');
+  onState(a,!!(ps.is_playing&&!ps.is_paused),list);
 }
 if(W.__spoConn){
   W.__spoConn.onCluster.push(fromCluster);
   if(W.__spoConn.cluster)setTimeout(function(){try{fromCluster(W.__spoConn.cluster);}catch(e){}},0);
 }
+/* Asks Spotify for the current Connect state (normally it arrives by itself). */
 function poll(force){
-  if(!W.__spoServer||!W.spotAuthToken)return;
-  var c=W.__spoConn,fresh=c&&c.clusterAt&&now()-c.clusterAt<60000;
-  if(!force&&fresh&&now()-S.pollAt<60000)return;
+  if(!W.__spoServer||!W.spotAuthToken||!W.spoCS)return;
+  var c=W.__spoConn,age=c&&c.clusterAt?now()-c.clusterAt:1e12;
+  if(!force&&age<180000)return;
+  if(now()-S.pollAt<(force?3000:60000))return;
   S.pollAt=now();
-  api('/me/player').then(function(p){
-    if(!p||!p.device){onState(null,false,null,'api');return;}
-    onState({id:p.device.id,name:p.device.name,type:p.device.type},!!p.is_playing,null,'api');
-  }).catch(function(){});
-  if(force||now()-S.devAt>120000){
-    S.devAt=now();
-    api('/me/player/devices').then(function(j){
-      var l=((j&&j.devices)||[]).map(function(d){return {id:d.id,name:d.name,type:d.type};});
-      S.devices=l;l.forEach(known);save();if(shown)renderDevs();
-    }).catch(function(){});
-  }
+  W.spoCS.cluster().catch(function(){});
 }
-function onState(a,playing,list,src){
+function onState(a,playing,list){
   if(list){S.devices=list.filter(function(d){return d.id;});S.devices.forEach(known);}
   var prev=S.active;
   if(a&&!a.name&&prev&&prev.id===a.id)a=prev;
@@ -336,18 +459,26 @@ function onState(a,playing,list,src){
   S.active=a;
   if(changed&&W.__spoServer){
     if(a&&isMine(a)){
-      S.mineAt=now();
+      S.mineAt=now();S.hold=null;
       connected(prev&&!isMine(prev)?prev:null);
     }else if(a&&prev&&isMine(prev)){
       log('Music moved to '+(a.name||'another device'),'');
-      /* someone moved it off SpotiOS on purpose: don't grab it back for a while */
-      S.snooze=now()+30*60000;
+      /* moved off SpotiOS on purpose: don't take it back until that device stops playing */
+      S.hold={id:a.id,at:now(),idle:0};
     }
   }
   if(a&&isMine(a))S.mineAt=now();
+  holdCheck();
   save();
   autoConnect();
   if(shown){renderOn();renderDevs();}
+}
+function holdCheck(){
+  var h=S.hold;if(!h)return;
+  var a=S.active,busy=!!a&&a.id===h.id&&S.playing;
+  if(busy){h.idle=0;return;}
+  if(!h.idle)h.idle=now();
+  if(now()-h.idle>10000&&now()-h.at>10000)S.hold=null;
 }
 function connected(from){
   if(now()<S.localUntil){log('Playing on SpotiOS','good');return;}
@@ -359,7 +490,7 @@ function connected(from){
     log('Blocked '+from.name+' and sent the music back','bad');
     toast('Blocked '+from.name);
     S.localUntil=now()+8000;
-    api('/me/player',{method:'PUT',body:{device_ids:[from.id],play:true}}).catch(function(){try{W.actPlayPause&&W.actPlayPause(false);}catch(e){}});
+    transferTo(from.id,'resume').catch(function(){try{W.actPlayPause&&W.actPlayPause(false);}catch(e){}});
     return;
   }
   cfg.connectedOnce=true;
@@ -372,24 +503,47 @@ function connected(from){
   log(from.name+' connected','good');
   save();
 }
-/* Auto-connect: the default device started playing by itself, so bring the music to SpotiOS. */
+function transferTo(id,mode){
+  return either(
+    function(){return csCall(function(c){return c.transfer(id,mode||'resume');});},
+    function(){return api('/me/player',{method:'PUT',body:{device_ids:[id],play:mode!=='pause'}});});
+}
+/* Take-over: the default device started playing, so bring the music to SpotiOS. */
 function autoConnect(){
   if(!W.__spoServer||!cfg.auto||!cfg.def)return;
   var a=S.active;
   if(!a||isMine(a)||!S.playing||!isDef(a))return;
-  if(now()<S.snooze||now()-S.pullAt<20000)return;
+  if(S.hold&&S.hold.id===a.id)return;
+  if(now()<S.pullUntil||now()-S.pullAt<12000)return;
   var id=myId();if(!id)return;
   S.pullAt=now();S.localUntil=now()+10000;
-  log('Took over from '+a.name+' (auto-connect)','good');
-  api('/me/player',{method:'PUT',body:{device_ids:[id],play:true}}).then(function(){toast('Now playing on SpotiOS');})
-    .catch(function(e){log('Couldn’t take over from '+a.name+': '+why(e),'bad');});
+  var name=a.name||'your default device';
+  log('Taking the music over from '+name,'good');
+  transferTo(id,'resume').then(function(){S.fails=0;toast('Now playing on SpotiOS');setTimeout(function(){poll(true);},2500);})
+    .catch(function(e){
+      if(++S.fails>=3){S.fails=0;S.pullUntil=now()+5*60000;}
+      log('Couldn’t take over from '+name+': '+why(e),'bad');
+    });
 }
-W.spoSrvTick=function(reason){if(W.__spoServer)poll(reason==='net');};
-W.spoSrvCheck=function(){if(W.__spoServer){S.devAt=0;poll(true);}};
+W.spoSrvTick=function(reason){if(!W.__spoServer)return;holdCheck();poll(reason==='net');autoConnect();warmEme();};
+W.spoSrvCheck=function(){if(W.__spoServer){S.pollAt=0;poll(true);}};
+
+/* The first song from another device starts faster when Widevine is already set up. */
+var emeDone=false;
+function warmEme(){
+  if(emeDone||!W.__spoServer||!W.spotAuthToken)return;
+  emeDone=true;
+  try{
+    if(!navigator.requestMediaKeySystemAccess)return;
+    navigator.requestMediaKeySystemAccess('com.widevine.alpha',[{initDataTypes:['cenc'],audioCapabilities:[{contentType:'audio/mp4; codecs="mp4a.40.2"',robustness:'SW_SECURE_CRYPTO'}]}])
+      .then(function(a){return a.createMediaKeys();}).catch(function(){});
+  }catch(e){}
+}
 
 /* ---------- screen ---------- */
-var shown=false,full=false,built=false,info={},tmr=null,lastNP='',np={pos:0,at:0,dur:0,playing:false};
-function want(){return !!W.__spoServer&&!full&&location.hostname==='open.spotify.com';}
+var shown=false,full=false,built=false,info={},tmr=null,lastNP='',np={pos:0,at:0,dur:0,playing:false},fullTipped=false;
+function onPlayerPage(){return location.hostname==='open.spotify.com';}
+function want(){return !!W.__spoServer&&!full&&onPlayerPage();}
 function build(){
   if(built)return;built=true;
   var st=document.createElement('style');st.id='ss-style';st.textContent=CSS;document.head.appendChild(st);
@@ -397,7 +551,7 @@ function build(){
   el.innerHTML=
    '<div class="ss-bg" id="ss-bg"></div><div class="ss-shade"></div>'+
    '<div class="ss-top"><div class="ss-badge" id="ss-badge"><i class="ss-dot" id="ss-dot"></i><b>SpotiOS Server</b><span id="ss-state">Starting…</span></div>'+
-     '<button class="ss-ib" id="ss-full" aria-label="Open full Spotify">'+ic('grid')+'</button></div>'+
+     '<button class="ss-ib" id="ss-menu" aria-label="More">'+ic('more')+'</button></div>'+
    '<div class="ss-scroll" id="ss-scroll">'+
     '<section class="ss-np idle" id="ss-np">'+
      '<div class="ss-art" id="ss-art"><img id="ss-cover" alt=""><div class="ss-idle"><i></i><i></i><i></i><div class="ss-core">'+ic('cast')+'</div></div></div>'+
@@ -407,16 +561,16 @@ function build(){
      '<div class="ss-ctrl"><button id="ss-prev" aria-label="Previous">'+ic('prev')+'</button><button class="ss-pp" id="ss-play" aria-label="Play">'+ic('play')+'</button><button id="ss-next" aria-label="Next">'+ic('next')+'</button></div>'+
      '<button class="ss-on" id="ss-on">'+ic('speaker')+'<span id="ss-on-t">Nothing playing</span>'+ic('chev')+'</button>'+
     '</section>'+
+    '<section class="ss-card" id="ss-lib">'+
+      '<div class="ss-h">'+ic('music')+'Play on SpotiOS</div>'+
+      '<div class="ss-search" id="ss-search">'+ic('search')+'<input id="ss-q" type="search" enterkeyhint="search" placeholder="Search songs" autocomplete="off"><button id="ss-qx" aria-label="Clear">'+ic('x')+'</button></div>'+
+      '<div class="ss-chips" id="ss-chips"><button data-t="recent" class="on">Recents</button><button data-t="playlists">Playlists</button><button data-t="liked">Liked songs</button></div>'+
+      '<div class="ss-list" id="ss-list"></div>'+
+    '</section>'+
     '<section class="ss-card" id="ss-conn"></section>'+
     '<section class="ss-card" id="ss-how"></section>'+
     '<section class="ss-card" id="ss-def"></section>'+
     '<section class="ss-card" id="ss-who"></section>'+
-    '<section class="ss-card" id="ss-lib">'+
-      '<div class="ss-h">'+ic('music')+'Play on SpotiOS</div>'+
-      '<div class="ss-search" id="ss-search">'+ic('search')+'<input id="ss-q" type="search" enterkeyhint="search" placeholder="Search songs" autocomplete="off"><button id="ss-qx" aria-label="Clear">'+ic('x')+'</button></div>'+
-      '<div class="ss-chips" id="ss-chips"><button data-t="recent" class="on">Recently played</button><button data-t="playlists">Playlists</button><button data-t="liked">Liked songs</button></div>'+
-      '<div class="ss-list" id="ss-list"></div>'+
-    '</section>'+
     '<section class="ss-card" id="ss-set"></section>'+
     '<section class="ss-card" id="ss-act"></section>'+
     '<div class="ss-foot">SpotiOS plays through this phone’s speaker or whatever it’s connected to. It can’t play while the phone is off or has no internet.</div>'+
@@ -425,35 +579,58 @@ function build(){
   var sc=document.createElement('div');sc.id='ss-scrim';document.body.appendChild(sc);
   var sh=document.createElement('div');sh.id='ss-sheet';document.body.appendChild(sh);
   var to=document.createElement('div');to.id='ss-toast';document.body.appendChild(to);
-  var pill=document.createElement('button');pill.id='ss-pill';pill.innerHTML='<i class="ss-dot ok" style="width:8px;height:8px"></i>Server';document.body.appendChild(pill);
+  var back=document.createElement('button');back.id='ss-back';back.setAttribute('aria-label','Back to the Server screen');
+  back.innerHTML='<i class="ss-dot ok"></i>Server';document.body.appendChild(back);
   bind(el);
   sc.addEventListener('click',closeSheet);
   sh.addEventListener('click',onSheetClick);
-  pill.addEventListener('click',function(){haptic();full=false;sync();});
+  back.addEventListener('click',function(){haptic();backToServer();});
+}
+/* In full Spotify: a Server tab in the tab bar (or a button at the top when tabs are off). */
+function syncReturn(){
+  var inFull=!!W.__spoServer&&full&&onPlayerPage();
+  var tabs=byId('spoTabs'),tab=byId('ss-tab');
+  var tabsOn=!!tabs&&document.documentElement.classList.contains('spo-tabs');
+  if(W.__spoServer&&tabs&&!tab){
+    tab=document.createElement('button');tab.type='button';tab.id='ss-tab';tab.setAttribute('aria-label','Server');
+    tab.innerHTML=ic('cast')+'<i class="ss-tab-dot"></i><span>Server</span>';
+    tab.addEventListener('click',function(e){e.stopPropagation();haptic();backToServer();});
+    tabs.insertBefore(tab,tabs.firstChild);
+  }else if(!W.__spoServer&&tab){tab.parentNode.removeChild(tab);}
+  var b=byId('ss-back');if(b)b.classList.toggle('show',inFull&&!tabsOn);
+}
+function backToServer(){full=false;sync();var sc=byId('ss-scroll');if(sc)sc.scrollTop=0;}
+function openFull(){
+  full=true;closeSheet();sync();
+  if(!fullTipped){fullTipped=true;
+    var tabsOn=!!byId('spoTabs')&&document.documentElement.classList.contains('spo-tabs');
+    setTimeout(function(){toast(tabsOn?'Tap Server in the tab bar to come back':'Tap Server at the top to come back');},450);}
 }
 function sync(){
   var on=want();
-  if(on)build();
+  if(on||W.__spoServer)build();
   document.documentElement.classList.toggle('ss-on',on);
   var el=byId('spoSrv');if(el)el.classList.toggle('ss-show',on);
-  var pill=byId('ss-pill');if(pill)pill.classList.toggle('show',!!W.__spoServer&&full&&location.hostname==='open.spotify.com');
+  syncReturn();
   if(on&&!shown){
     shown=true;
     info=status();
     renderAll();
     loadList();
     poll(true);
+    warmEme();
     if(!tmr)tmr=setInterval(loop,500);
   }else if(!on&&shown){
     shown=false;closeSheet();
   }
 }
+function realHidden(){try{return W.__spoRealHidden?W.__spoRealHidden():document.hidden;}catch(e){return false;}}
 var n5=0;
 function loop(){
   if(!shown){clearInterval(tmr);tmr=null;return;}
-  if(document.hidden||W.__splBg)return;
+  if(realHidden()||W.__splBg)return;
   renderNP();
-  if(++n5%10===0){info=status();renderConn();}
+  if(++n5%10===0){info=status();renderConn();syncReturn();}
   if(n5%30===0){poll(false);renderLog();}
 }
 function status(){try{return JSON.parse(AndBridge.serverStatus()||'{}')||{};}catch(e){return {};}}
@@ -462,10 +639,11 @@ function renderAll(){renderNP();renderOn();renderConn();renderHow();renderDef();
 function connState(){
   var c=W.__spoConn||{},n=now(),ws=c.ws,st=ws?ws.readyState:-1;
   if(navigator.onLine===false)return {k:'bad',t:'No internet',d:'SpotiOS reconnects by itself when the internet is back.'};
-  if(!W.spotAuthToken&&n-(c.since||n)>20000)return {k:'warn',t:'Signing in…',d:'Waiting for Spotify to sign SpotiOS in.'};
-  if(st===1&&c.lastMsg&&n-c.lastMsg<75000)return {k:'ok',t:'Ready',d:'Visible as “'+myName()+'” on all your Spotify devices.'};
-  if(st===0||st===-1)return {k:'warn',t:'Connecting…',d:'Connecting to Spotify Connect.'};
-  return {k:'warn',t:'Reconnecting…',d:'The connection dropped. SpotiOS is reconnecting.'};
+  if(!W.spotAuthToken)return n-(c.since||n)>20000?{k:'warn',t:'Signing in…',d:'Waiting for Spotify to sign SpotiOS in.'}:{k:'warn',t:'Starting…',d:'Starting the Spotify player.'};
+  var listed=!!c.inCluster&&c.clusterAt&&n-c.clusterAt<10*60000;
+  if(listed||(st===1&&c.lastMsg&&n-c.lastMsg<75000))return {k:'ok',t:'Ready',d:'Shows up as “'+myName()+'” on all your Spotify devices.'};
+  if(st===3)return {k:'warn',t:'Reconnecting…',d:'The connection to Spotify dropped. SpotiOS is reconnecting.'};
+  return {k:'warn',t:'Connecting…',d:'Joining Spotify Connect.'};
 }
 function renderNP(){
   /* a song tapped here shows at once, until the player has moved on to it */
@@ -519,11 +697,11 @@ function renderHow(){
   el.classList.toggle('open',open);
   el.innerHTML='<div class="ss-h" data-a="fold">'+ic('help')+'How to connect'+ic('chev').replace('<svg','<svg class="ss-chev"')+'</div>'+
    '<div class="ss-fold"><ol class="ss-steps">'+
-    '<li>Leave SpotiOS running<small>Lock the phone or swipe SpotiOS away, the server keeps going.</small></li>'+
+    '<li>Leave SpotiOS running<small>Lock the phone or swipe SpotiOS away, the server keeps going. You don’t need to play anything here first.</small></li>'+
     '<li>Open Spotify<small>On this phone, a computer, a tablet, anything signed in to the same Spotify account.</small></li>'+
     '<li>Tap the devices button<small>The speaker icon at the bottom of the Now Playing screen, or next to the volume on a computer.</small></li>'+
     '<li>Pick “'+esc(myName())+'”<small>The music plays here, and Spotify becomes the remote. The first device you do this from becomes your default device.</small></li>'+
-   '</ol><div class="ss-note">Works on any network, Wi-Fi or mobile data, because Spotify Connect goes through Spotify’s servers.</div>'+
+   '</ol><div class="ss-note">Works on any network, Wi-Fi or mobile data, because Spotify Connect goes through Spotify’s servers. If “'+esc(myName())+'” is missing from the list, tap Reconnect now above.</div>'+
    '<div class="ss-btns"><button class="ss-btn pri" data-a="spotify">'+ic('spotify')+'Open Spotify</button></div></div>';
 }
 function renderDef(){
@@ -532,10 +710,10 @@ function renderDef(){
   if(d){
     var online=S.devices.some(function(x){return same(x,d);});
     h+='<div class="ss-row"><div class="ss-ico g">'+ic(devIc(d.type))+'</div><div class="ss-tx"><b>'+esc(d.name)+'</b><small>'+devLabel(d.type)+(online?' · online':' · not online right now')+'</small></div></div>'+
-      '<div class="ss-row"><div class="ss-tx"><b>Auto-connect</b><small>When '+esc(d.name)+' starts playing by itself, SpotiOS takes the music over. If you move the music off SpotiOS, it waits 30 minutes before doing that again.</small></div><button class="ss-sw'+(cfg.auto?' on':'')+'" data-a="auto" aria-label="Auto-connect"></button></div>'+
+      '<div class="ss-row"><div class="ss-ico g">'+ic('takeover')+'</div><div class="ss-tx"><b>Take over its music</b><small>When '+esc(d.name)+' starts playing, SpotiOS moves the music here. If you move it back to '+esc(d.name)+', SpotiOS leaves it there until it stops playing.</small></div><button class="ss-sw'+(cfg.auto?' on':'')+'" data-a="auto" aria-label="Take over its music"></button></div>'+
       '<div class="ss-btns"><button class="ss-btn sm" data-a="pickdef">Change</button><button class="ss-btn sm dng" data-a="forgetdef">Forget</button></div>';
   }else{
-    h+='<div class="ss-msg" style="text-align:left;padding:4px 0 0">No default device yet. The first device that plays on SpotiOS becomes the default, so SpotiOS can connect to it on its own next time.'+
+    h+='<div class="ss-msg" style="text-align:left;padding:4px 0 0">No default device yet. The first device that plays on SpotiOS becomes the default, so SpotiOS can take its music over on its own.'+
       '<div><button class="ss-btn sm" data-a="pickdef">Choose a device</button></div></div>';
   }
   el.innerHTML=h;
@@ -573,8 +751,8 @@ function renderSet(){
    '<div class="ss-row"><div class="ss-ico '+(info.battery?'g':'y')+'">'+ic('battery')+'</div><div class="ss-tx"><b>Battery: '+(info.battery?'unrestricted':'restricted')+'</b><small>'+
      (info.battery?'Android lets SpotiOS run in the background.':'Android may pause SpotiOS in the background and drop the connection.')+'</small></div>'+
      (info.battery?'':'<button class="ss-btn sm pri" data-a="battery">Fix</button>')+'</div>'+
-   '<div class="ss-row"><div class="ss-ico g">'+ic('swipe')+'</div><div class="ss-tx"><b>Keeps running when swiped away</b><small>Swiping SpotiOS out of recent apps doesn’t stop the server. Use Turn off below to stop it.</small></div></div>'+
-   '<div class="ss-btns"><button class="ss-btn sm" data-a="full">'+ic('grid')+'Open full Spotify</button><button class="ss-btn sm" data-a="settings">'+ic('settings')+'SpotiOS settings</button><button class="ss-btn sm dng" data-a="off">'+ic('power')+'Turn off Server Mode</button></div>';
+   '<div class="ss-row"><div class="ss-ico g">'+ic('swipe')+'</div><div class="ss-tx"><b>Keeps running when swiped away</b><small>Swiping SpotiOS out of recent apps doesn’t stop the server. Switch to Normal mode to stop it.</small></div></div>'+
+   '<div class="ss-btns"><button class="ss-btn sm" data-a="full">'+ic('grid')+'Browse Spotify</button><button class="ss-btn sm" data-a="settings">'+ic('settings')+'SpotiOS settings</button><button class="ss-btn sm dng" data-a="normal">'+ic('power')+'Switch to Normal mode</button></div>';
   el.innerHTML=h;
 }
 function renderLog(){
@@ -586,39 +764,117 @@ function renderLog(){
 }
 
 /* ---------- play something ---------- */
-var lib={tab:'recent',q:'',items:[],req:0,qt:null,uid:''};
-function itemArt(it){var im=it&&((it.album&&it.album.images)||it.images);if(!im||!im.length)return '';var x=im[1]||im[0];return x&&x.url||'';}
-function trackItem(t){return {kind:'track',name:t.name,sub:(t.artists||[]).map(function(a){return a.name;}).join(', '),art:itemArt(t),uri:t.uri};}
+var lib={tab:'recent',q:'',items:[],req:0,qt:null,uid:'',cache:{}};
+function pick(src){
+  if(!src||!src.length)return '';
+  var b=null;
+  for(var i=0;i<src.length;i++){var s=src[i]||{},w=+s.width||0;if(w>=120&&w<=400&&(!b||w<(+b.width||9999)))b=s;}
+  return ((b||src[0])||{}).url||'';
+}
+function imgOf(d){
+  if(!d)return '';
+  var c=d.coverArt||(d.albumOfTrack&&d.albumOfTrack.coverArt);if(c&&c.sources)return pick(c.sources);
+  var im=d.images;if(im&&im.items&&im.items.length)return pick(im.items[0].sources);
+  if(im&&im.length)return pick(im);
+  var v=d.visuals&&d.visuals.avatarImage;if(v&&v.sources)return pick(v.sources);
+  if(d.image&&d.image.sources)return pick(d.image.sources);
+  return '';
+}
+function isLiked(uri){return /:collection/.test(uri)&&!/:collection:/.test(uri);}
+function gTrack(w){
+  if(!w)return null;
+  var d=w.data||w,uri=w._uri||d.uri||'';
+  if(!uri||uri.indexOf(':track:')<0)return null;
+  var ar=((d.artists&&d.artists.items)||[]).map(function(a){return a&&a.profile&&a.profile.name;}).filter(Boolean);
+  var alb=d.albumOfTrack||{};
+  return {kind:'track',name:d.name||'',sub:ar.join(', '),art:imgOf(d),uri:uri,ctx:alb.uri||''};
+}
+function wTrack(t){
+  var im=(t.album&&t.album.images)||[];
+  return {kind:'track',name:t.name,sub:(t.artists||[]).map(function(a){return a.name;}).join(', '),art:im.length?(im[1]||im[0]).url:'',uri:t.uri,ctx:(t.album&&t.album.uri)||''};
+}
+function gEntity(w){
+  if(!w)return null;
+  var d=w.data||w,uri=w._uri||d.uri||'';
+  if(!uri||uri.indexOf(':folder:')!==-1)return null;
+  if(isLiked(uri))return {kind:'liked',name:d.name||'Liked Songs',sub:'Your liked songs',art:'',uri:uri};
+  var kind=uri.split(':')[1]||'';
+  var label={playlist:'Playlist',album:'Album',artist:'Artist',show:'Podcast',episode:'Episode'}[kind]||'';
+  var by=(d.ownerV2&&d.ownerV2.data&&d.ownerV2.data.name)||(d.artists&&d.artists.items&&d.artists.items[0]&&d.artists.items[0].profile&&d.artists.items[0].profile.name)||'';
+  var name=d.name||(d.profile&&d.profile.name)||'';
+  if(!name)return null;
+  return {kind:'ctx',name:name,sub:label+(by?' · '+by:''),art:imgOf(d),uri:uri};
+}
 function listMsg(h){var l=byId('ss-list');if(l)l.innerHTML='<div class="ss-msg">'+h+'</div>';}
-function loadList(){
-  var id=++lib.req,p;
-  listMsg('Loading…');
+function fetchList(){
   if(lib.q){
-    p=api('/search?type=track&limit=25&q='+encodeURIComponent(lib.q)).then(function(j){return ((j&&j.tracks&&j.tracks.items)||[]).filter(Boolean).map(trackItem);});
-  }else if(lib.tab==='playlists'){
-    p=api('/me/playlists?limit=50').then(function(j){
-      return [{kind:'liked',name:'Liked Songs',sub:'Your liked songs',art:'',uri:''}].concat(((j&&j.items)||[]).filter(Boolean).map(function(pl){
-        var im=pl.images||[];return {kind:'ctx',name:pl.name,sub:'Playlist'+(pl.owner&&pl.owner.display_name?' · '+pl.owner.display_name:''),art:im.length?(im[im.length>1?1:0].url):'',uri:pl.uri};
-      }));
-    });
-  }else if(lib.tab==='liked'){
-    p=api('/me/tracks?limit=50').then(function(j){return ((j&&j.items)||[]).map(function(x){return x&&x.track;}).filter(Boolean).map(trackItem);});
-  }else{
-    p=api('/me/player/recently-played?limit=40').then(function(j){
-      var seen={},out=[];
-      ((j&&j.items)||[]).forEach(function(x){var t=x&&x.track;if(t&&t.uri&&!seen[t.uri]){seen[t.uri]=1;out.push(trackItem(t));}});
-      return out;
+    var q=lib.q;
+    return either(function(){
+      return gql('searchTracks',{searchTerm:q,offset:0,limit:30,includeAudiobooks:false,includePreReleases:true,includeAlbumPreReleases:true,includeAuthors:false,includeEpisodeContentRatingsV2:false})
+        .then(function(d){var t=d&&d.searchV2&&d.searchV2.tracksV2;return ((t&&t.items)||[]).map(function(x){return gTrack(x&&(x.item||x));}).filter(Boolean);});
+    },function(){return api('/search?type=track&limit=25&q='+encodeURIComponent(q)).then(function(j){return ((j&&j.tracks&&j.tracks.items)||[]).filter(Boolean).map(wTrack);});});
+  }
+  if(lib.tab==='playlists'){
+    return either(function(){
+      return gql('libraryV3',{filters:['Playlists'],order:null,textFilter:null,features:['LIKED_SONGS','YOUR_EPISODES_V2','PRERELEASES','PRERELEASES_V2','EVENTS'],
+          limit:50,offset:0,flatten:true,expandedFolders:[],folderUri:null,includeFoldersWhenFlattening:true})
+        .then(function(d){
+          var l=d&&d.me&&d.me.libraryV3;
+          var out=((l&&l.items)||[]).map(function(x){return gEntity(x&&(x.item||x));}).filter(Boolean);
+          if(!out.some(function(x){return x.kind==='liked';}))out.unshift({kind:'liked',name:'Liked Songs',sub:'Your liked songs',art:'',uri:''});
+          return out;
+        });
+    },function(){
+      return api('/me/playlists?limit=50').then(function(j){
+        return [{kind:'liked',name:'Liked Songs',sub:'Your liked songs',art:'',uri:''}].concat(((j&&j.items)||[]).filter(Boolean).map(function(pl){
+          var im=pl.images||[];return {kind:'ctx',name:pl.name,sub:'Playlist'+(pl.owner&&pl.owner.display_name?' · '+pl.owner.display_name:''),art:im.length?(im[im.length>1?1:0].url):'',uri:pl.uri};
+        }));
+      });
     });
   }
-  p.then(function(items){if(id!==lib.req)return;lib.items=items;renderList();})
-   .catch(function(e){if(id!==lib.req)return;listMsg(esc(why(e))+'<br><button class="ss-btn sm" data-a="relist">Try again</button>');});
+  if(lib.tab==='liked'){
+    return either(function(){
+      return gql('fetchLibraryTracks',{offset:0,limit:50}).then(function(d){
+        var t=d&&d.me&&d.me.library&&d.me.library.tracks;
+        return ((t&&t.items)||[]).map(function(x){return gTrack(x&&(x.track||x.item||x));}).filter(Boolean);
+      });
+    },function(){return api('/me/tracks?limit=50').then(function(j){return ((j&&j.items)||[]).map(function(x){return x&&x.track;}).filter(Boolean).map(wTrack);});});
+  }
+  /* Recents: what you played lately (playlists, albums, artists), like the Spotify app's list. */
+  return either(function(){
+    return uid().then(function(u){
+      return spc('/recently-played/v3/user/'+encodeURIComponent(u)+'/recently-played?format=json&offset=0&limit=50&filter=default,collection-new-episodes');
+    }).then(function(j){
+      var seen={},uris=[];
+      ((j&&j.playContexts)||[]).forEach(function(p){var u=p&&p.uri;if(u&&!seen[u]&&uris.length<30){seen[u]=1;uris.push(u);}});
+      if(!uris.length)return [];
+      return gql('fetchEntitiesForRecentlyPlayed',{uris:uris}).then(function(d){
+        var look=(d&&d.lookup)||[],out=[];
+        for(var i=0;i<look.length;i++){var e=gEntity(look[i]);if(e){if(!e.uri)e.uri=uris[i];out.push(e);}}
+        return out;
+      });
+    });
+  },function(){
+    return api('/me/player/recently-played?limit=40').then(function(j){
+      var seen={},out=[];
+      ((j&&j.items)||[]).forEach(function(x){var t=x&&x.track;if(t&&t.uri&&!seen[t.uri]){seen[t.uri]=1;out.push(wTrack(t));}});
+      return out;
+    });
+  });
+}
+function loadList(force){
+  var id=++lib.req,key=lib.q?'q:'+lib.q:lib.tab,hit=lib.cache[key];
+  if(!force&&hit&&now()-hit.at<(lib.q?120000:300000)){lib.items=hit.items;renderList();return;}
+  if(hit){lib.items=hit.items;renderList();}else listMsg('Loading…');
+  fetchList().then(function(items){lib.cache[key]={at:now(),items:items};if(id!==lib.req)return;lib.items=items;renderList();})
+   .catch(function(e){if(id!==lib.req||hit)return;listMsg(esc(why(e))+'<br><button class="ss-btn sm" data-a="relist">Try again</button>');});
 }
 function renderList(){
   var l=byId('ss-list');if(!l)return;
   if(!lib.items.length){listMsg(lib.q?'No songs found.':lib.tab==='recent'?'Nothing played yet.':'Nothing here yet.');return;}
   var cur=W.track||'';
   l.innerHTML=lib.items.map(function(it,i){
-    var art=it.kind==='liked'?'<div class="ss-ph lk">'+ic('heart')+'</div>':(it.art?'<img loading="lazy" src="'+esc(it.art)+'" alt="">':'<div class="ss-ph">'+ic('music')+'</div>');
+    var art=it.kind==='liked'?'<div class="ss-ph lk">'+ic('heart')+'</div>':(it.art?'<img loading="lazy" src="'+esc(it.art)+'" alt=""'+(it.uri.indexOf(':artist:')>0?' class="rnd"':'')+'>':'<div class="ss-ph">'+ic('music')+'</div>');
     return '<div class="ss-it'+(it.kind==='track'&&cur&&it.name===cur?' now':'')+'" data-i="'+i+'" role="button">'+art+'<div class="ss-tx"><b>'+esc(it.name)+'</b><small>'+esc(it.sub)+'</small></div><span class="ss-go">'+ic('play')+'</span></div>';
   }).join('');
 }
@@ -626,73 +882,99 @@ function playItem(i,row){
   var it=lib.items[i];if(!it)return;
   np.pend=null;
   if(it.kind==='liked'){
-    var go=function(uid){playOnMe({context_uri:'spotify:user:'+uid+':collection'},row,it.name);};
-    if(lib.uid)go(lib.uid);else api('/me').then(function(me){lib.uid=me&&me.id||'';if(lib.uid)go(lib.uid);else rowFail(row,new Error('x'));}).catch(function(e){rowFail(row,e);});
+    rowBusy(row);
+    uid().then(function(u){playCtx('spotify:user:'+u+':collection',null,row);}).catch(function(e){rowDone(row);toast(why(e));});
     return;
   }
-  if(it.kind==='ctx'){playOnMe({context_uri:it.uri},row,it.name);return;}
+  if(it.kind==='ctx'){playCtx(it.uri,null,row);return;}
   if(it.name&&it.name!==(W.track||'')){
     np.pend={t:it.name,a:it.sub||'',cv:it.art||'',old:W.track||'',until:now()+8000};
     renderNP();
   }
-  /* a song: play it and keep going down the list, like tapping a song in the app */
-  var uris=[];
-  if(lib.q)uris=[it.uri];
-  else for(var j=i;j<lib.items.length&&uris.length<50;j++)if(lib.items[j].kind==='track')uris.push(lib.items[j].uri);
-  playOnMe({uris:uris},row,it.name);
-}
-function rowFail(row,e){if(row)row.classList.remove('busy');toast(why(e));}
-function playOnMe(body,row,name){
-  if(row){var b=document.querySelectorAll('#ss-list .ss-it.busy');for(var k=0;k<b.length;k++)b[k].classList.remove('busy');row.classList.add('busy');var g=row.querySelector('.ss-go');if(g)g.innerHTML=ic('refresh');}
-  haptic();
-  S.localUntil=now()+10000;
-  var id=myId(),q=id?'?device_id='+encodeURIComponent(id):'';
-  function done(){
-    if(row){row.classList.remove('busy');var g=row.querySelector('.ss-go');if(g)g.innerHTML=ic('play');var all=document.querySelectorAll('#ss-list .ss-it.now');for(var k=0;k<all.length;k++)all[k].classList.remove('now');row.classList.add('now');}
-    if(name&&!np.pend){byId('ss-title').textContent=name;}
-    if(!early)toTop();
+  /* a song keeps going like in the app: through Liked Songs, or through its album */
+  if(lib.tab==='liked'&&!lib.q){
+    rowBusy(row);
+    uid().then(function(u){playCtx('spotify:user:'+u+':collection',it.uri,row);}).catch(function(e){rowDone(row);np.pend=null;toast(why(e));});
+    return;
   }
-  function toTop(){var sc=byId('ss-scroll');if(sc)sc.scrollTo({top:0,behavior:'smooth'});}
-  var early=!!np.pend;if(early)toTop();
-  api('/me/player/play'+q,{method:'PUT',body:body}).then(done).catch(function(e){
-    if(id&&/http404|http502/.test(String(e&&e.message))){
-      return api('/me/player',{method:'PUT',body:{device_ids:[id],play:false}})
-        .then(function(){return new Promise(function(r){setTimeout(r,700);});})
-        .then(function(){return api('/me/player/play'+q,{method:'PUT',body:body});}).then(done);
-    }
-    throw e;
-  }).catch(function(e){np.pend=null;lastNP='';renderNP();if(row){row.classList.remove('busy');var g=row.querySelector('.ss-go');if(g)g.innerHTML=ic('play');}toast(why(e));});
+  playCtx(it.ctx||it.uri,it.ctx?it.uri:null,row);
 }
+function rowBusy(row){
+  var b=document.querySelectorAll('#ss-list .ss-it.busy');for(var k=0;k<b.length;k++)rowDone(b[k]);
+  if(!row)return;row.classList.add('busy');var g=row.querySelector('.ss-go');if(g)g.innerHTML=ic('refresh');
+}
+function rowDone(row){if(!row)return;row.classList.remove('busy');var g=row.querySelector('.ss-go');if(g)g.innerHTML=ic('play');}
+function playCtx(ctx,skip,row){
+  rowBusy(row);
+  haptic();
+  S.localUntil=now()+10000;S.hold=null;
+  var early=!!np.pend;if(early)toTop();
+  either(function(){return csCall(function(c){return c.play(ctx,skip||null,'');});},
+    function(){
+      var id=myId(),q=id?'?device_id='+encodeURIComponent(id):'',body={context_uri:ctx};
+      if(skip)body.offset={uri:skip};
+      return api('/me/player/play'+q,{method:'PUT',body:body});
+    })
+  .then(function(){
+    rowDone(row);
+    var all=document.querySelectorAll('#ss-list .ss-it.now');for(var k=0;k<all.length;k++)all[k].classList.remove('now');
+    if(row)row.classList.add('now');
+    if(!early)toTop();
+  }).catch(function(e){np.pend=null;lastNP='';renderNP();rowDone(row);toast(why(e));});
+}
+function toTop(){var sc=byId('ss-scroll');if(sc)sc.scrollTo({top:0,behavior:'smooth'});}
 
-/* ---------- sheet (play on / default device) ---------- */
+/* ---------- sheets: menu, play on, default device ---------- */
 var sheetKind='';
+function sheetRow(attr,icon,title,sub,cls){
+  return '<div class="ss-row'+(cls?' '+cls:'')+'" '+attr+'><div class="ss-ico'+(cls&&cls.indexOf('dng')>-1?' r':'')+'">'+ic(icon)+'</div><div class="ss-tx"><b>'+title+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</div>'+ic('check').replace('<svg','<svg class="ss-chk"')+'</div>';
+}
 function openSheet(kind){
   sheetKind=kind;
-  var sh=byId('ss-sheet');
-  var t=kind==='def'?'Default device':'Play on';
-  var p=kind==='def'?'SpotiOS connects to this device on its own when it starts playing.':'Move the music to another device, or bring it to SpotiOS.';
-  sh.innerHTML='<div class="ss-grab"></div><h4>'+t+'</h4><p>'+p+'</p><div class="ss-sb" id="ss-sb"><div class="ss-msg">Looking for devices…</div></div>';
+  var sh=byId('ss-sheet'),t,p,body='';
+  if(kind==='menu'){
+    t='SpotiOS Server';p='SpotiOS is a Spotify Connect speaker right now.';
+    body=sheetRow('data-m="full"','grid','Browse Spotify','Search, your library and the full player. Come back with the Server tab.')+
+      sheetRow('data-m="play"','cast','Play on another device','Move the music to a speaker, computer or TV.')+
+      sheetRow('data-m="settings"','settings','SpotiOS settings','Rename this speaker, look and playback.')+
+      sheetRow('data-m="normal"','power','Switch to Normal mode','Use SpotiOS as a regular Spotify app again.','dng');
+  }else if(kind==='normal'){
+    t='Switch to Normal mode?';p='SpotiOS stops being a Spotify Connect speaker in the background and opens as a regular player. You can turn Server Mode back on in Settings.';
+    body=sheetRow('data-m="normal-yes"','power','Switch to Normal mode','','dng')+sheetRow('data-m="cancel"','x','Keep Server Mode','');
+  }else if(kind==='def'){
+    t='Default device';p='When this device starts playing, SpotiOS takes the music over.';
+    body='<div class="ss-msg">Looking for devices…</div>';
+  }else{
+    t='Play on';p='Move the music to another device, or bring it to SpotiOS.';
+    body='<div class="ss-msg">Looking for devices…</div>';
+  }
+  sh.innerHTML='<div class="ss-grab"></div><h4>'+t+'</h4><p>'+p+'</p><div class="ss-sb" id="ss-sb">'+body+'</div>';
   sh.classList.add('open');byId('ss-scrim').classList.add('open');
-  api('/me/player/devices').then(function(j){
-    S.devices=((j&&j.devices)||[]).map(function(d){return {id:d.id,name:d.name,type:d.type,active:d.is_active};});
-    S.devices.forEach(known);save();fillSheet();
-  }).catch(function(){fillSheet();});
+  if(kind==='def'||kind==='play'){
+    var fill=function(){if(sheetKind===kind)fillSheet();};
+    var c=W.__spoConn;
+    if(c&&c.clusterAt&&now()-c.clusterAt<20000){fill();return;}
+    csCall(function(x){return x.cluster();}).then(fill).catch(function(){
+      return api('/me/player/devices').then(function(j){
+        S.devices=((j&&j.devices)||[]).map(function(d){return {id:d.id,name:d.name,type:d.type};});
+        S.devices.forEach(known);save();
+      }).catch(function(){});
+    }).then(fill);
+  }
 }
 function fillSheet(){
   var sb=byId('ss-sb');if(!sb||!sheetKind)return;
   var h='';
   if(sheetKind==='def'){
     var rows=devRows();
-    h+='<div class="ss-row'+(cfg.def?'':' cur')+'" data-s="none"><div class="ss-ico">'+ic('x')+'</div><div class="ss-tx"><b>No default device</b><small>Don’t connect to anything on its own</small></div>'+ic('check').replace('<svg','<svg class="ss-chk"')+'</div>';
-    rows.forEach(function(d){
-      h+='<div class="ss-row'+(isDef(d)?' cur':'')+'" data-s="'+esc(d.id)+'"><div class="ss-ico">'+ic(devIc(d.type))+'</div><div class="ss-tx"><b>'+esc(d.name)+'</b><small>'+devLabel(d.type)+(d.on?' · online':'')+'</small></div>'+ic('check').replace('<svg','<svg class="ss-chk"')+'</div>';
-    });
+    h+=sheetRow('data-s="none"','x','No default device','Don’t take music over from any device',cfg.def?'':'cur');
+    rows.forEach(function(d){h+=sheetRow('data-s="'+esc(d.id)+'"',devIc(d.type),esc(d.name),devLabel(d.type)+(d.on?' · online':''),isDef(d)?'cur':'');});
   }else{
     var a=S.active,mine={id:myId(),name:myName(),type:'Smartphone'};
     var list=[mine].concat(S.devices.filter(function(d){return !isMine(d);}));
     list.forEach(function(d){
-      var cur=a&&(isMine(d)?isMine(a):a.id===d.id);
-      h+='<div class="ss-row'+(cur?' cur':'')+'" data-p="'+esc(isMine(d)?'@me':d.id)+'"><div class="ss-ico'+(isMine(d)?' g':'')+'">'+ic(isMine(d)?'phone':devIc(d.type))+'</div><div class="ss-tx"><b>'+esc(isMine(d)?'SpotiOS (this phone)':d.name)+'</b><small>'+(isMine(d)?'Plays here':devLabel(d.type))+'</small></div>'+ic('check').replace('<svg','<svg class="ss-chk"')+'</div>';
+      var me=d===mine,cur=a&&(me?isMine(a):a.id===d.id);
+      h+=sheetRow('data-p="'+esc(me?'@me':d.id)+'"',me?'phone':devIc(d.type),esc(me?'SpotiOS (this phone)':d.name),me?'Plays here':devLabel(d.type),cur?'cur':'');
     });
     if(list.length<2)h+='<div class="ss-note" style="padding:10px 2px">Other devices show up here when Spotify is open on them.</div>';
   }
@@ -702,6 +984,15 @@ function closeSheet(){sheetKind='';var sh=byId('ss-sheet');if(sh)sh.classList.re
 function onSheetClick(e){
   var r=e.target.closest&&e.target.closest('.ss-row');if(!r)return;
   haptic();
+  var m=r.getAttribute('data-m');
+  if(m){
+    if(m==='full'){openFull();return;}
+    if(m==='play'){openSheet('play');return;}
+    if(m==='settings'){closeSheet();try{AndBridge.openSettings();}catch(x){}return;}
+    if(m==='normal'){openSheet('normal');return;}
+    if(m==='normal-yes'){closeSheet();toNormal();return;}
+    closeSheet();return;
+  }
   if(sheetKind==='def'){
     var sid=r.getAttribute('data-s');
     if(sid==='none'){cfg.def=null;log('Default device cleared','');}
@@ -709,27 +1000,32 @@ function onSheetClick(e){
     save();closeSheet();renderDef();renderWho();renderSet();return;
   }
   var pid=r.getAttribute('data-p'),id=pid==='@me'?myId():pid;
-  if(!id){toast('SpotiOS isn’t ready yet');return;}
+  if(!id){toast('SpotiOS is still joining Spotify Connect');return;}
   S.localUntil=now()+10000;
-  if(pid!=='@me'&&S.active&&isMine(S.active))S.snooze=now()+30*60000;
-  r.classList.add('cur');
-  api('/me/player',{method:'PUT',body:{device_ids:[id],play:true}}).then(function(){closeSheet();setTimeout(function(){poll(true);},1200);})
-    .catch(function(err){toast(why(err));});
+  if(pid!=='@me')S.hold={id:id,at:now(),idle:0};else S.hold=null;
+  var rs=byId('ss-sb').querySelectorAll('.ss-row');for(var k=0;k<rs.length;k++)rs[k].classList.toggle('cur',rs[k]===r);
+  transferTo(id,'resume').then(function(){closeSheet();setTimeout(function(){poll(true);},1500);})
+    .catch(function(err2){toast(why(err2));fillSheet();});
+}
+function toNormal(){
+  try{AndBridge.setServerMode(false);}catch(e){}
+  W.spoSetServer(false);
+  toast('Normal mode: SpotiOS is a regular player again');
 }
 var toastT=null;
-function toast(m){var t=byId('ss-toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show');},2600);}
+function toast(m){var t=byId('ss-toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show');},2800);}
 
 /* ---------- input ---------- */
 function bind(el){
   el.addEventListener('click',function(e){
     var t=e.target;
-    var b=t.closest&&t.closest('[data-a],#ss-play,#ss-prev,#ss-next,#ss-on,#ss-full,.ss-it,#ss-chips button,#ss-qx');
+    var b=t.closest&&t.closest('[data-a],#ss-play,#ss-prev,#ss-next,#ss-on,#ss-menu,.ss-it,#ss-chips button,#ss-qx');
     if(!b)return;
     if(b.id==='ss-play'){haptic();try{W.actPlayPause();}catch(x){}setTimeout(renderNP,250);return;}
     if(b.id==='ss-prev'){haptic();try{W.actSkipBack();}catch(x){}return;}
     if(b.id==='ss-next'){haptic();try{W.actSkipForward();}catch(x){}return;}
     if(b.id==='ss-on'){haptic();openSheet('play');return;}
-    if(b.id==='ss-full'){haptic();full=true;sync();return;}
+    if(b.id==='ss-menu'){haptic();openSheet('menu');return;}
     if(b.id==='ss-qx'){var q=byId('ss-q');q.value='';lib.q='';byId('ss-search').classList.remove('has');loadList();return;}
     if(b.classList.contains('ss-it')){if(!b.classList.contains('busy'))playItem(+b.getAttribute('data-i'),b);return;}
     if(b.parentNode&&b.parentNode.id==='ss-chips'){
@@ -742,7 +1038,7 @@ function bind(el){
   var q=byId('ss-q');
   q.addEventListener('input',function(){
     var v=q.value.trim();byId('ss-search').classList.toggle('has',!!q.value);
-    clearTimeout(lib.qt);lib.qt=setTimeout(function(){lib.q=v;loadList();},350);
+    clearTimeout(lib.qt);lib.qt=setTimeout(function(){lib.q=v;loadList();},400);
   });
   q.addEventListener('keydown',function(e){if(e.key==='Enter'){q.blur();clearTimeout(lib.qt);lib.q=q.value.trim();loadList();}});
 }
@@ -752,12 +1048,12 @@ function action(a,b){
   if(a==='spotify'){try{AndBridge.openSpotifyApp();}catch(e){location.href='spotify:';}return;}
   if(a==='reconnect'){
     var c2=W.__spoConn,ws=c2&&c2.ws;
-    if(ws&&ws.readyState===1){try{ws.close(4002,'user');}catch(e){}c2.forced++;toast('Reconnecting to Spotify…');}
-    else{toast('Reloading the player…');setTimeout(function(){location.reload();},300);}
+    if(ws&&ws.readyState===1){try{ws.close(4002,'user');}catch(e){}c2.forced++;toast('Reconnecting to Spotify…');setTimeout(function(){poll(true);},4000);}
+    else{toast('Restarting the player…');setTimeout(function(){location.reload();},300);}
     log('Reconnected by hand','');setTimeout(renderConn,500);return;
   }
   if(a==='rename'||a==='settings'){try{AndBridge.openSettings();}catch(e){}return;}
-  if(a==='auto'){cfg.auto=!cfg.auto;save();b.classList.toggle('on',cfg.auto);if(cfg.auto)S.snooze=0;renderSet();return;}
+  if(a==='auto'){cfg.auto=!cfg.auto;save();b.classList.toggle('on',cfg.auto);if(cfg.auto)S.hold=null;renderSet();if(cfg.auto)autoConnect();return;}
   if(a==='pickdef'){openSheet('def');return;}
   if(a==='forgetdef'){if(cfg.def)log('Forgot '+cfg.def.name+' as the default device','');cfg.def=null;save();renderDef();renderWho();return;}
   if(a==='pol-all'||a==='pol-list'){cfg.policy=a==='pol-list'?'list':'all';save();renderWho();
@@ -768,7 +1064,6 @@ function action(a,b){
     var nowOk=!allowed({id:id,name:e.name,type:e.type});
     e.allow=nowOk;save();renderWho();
     log((nowOk?'Allowed ':'Blocked ')+e.name,nowOk?'good':'bad');
-    /* blocking the device that is sending music right now sends it back */
     if(!nowOk&&S.active&&isMine(S.active)&&S.playing)toast(e.name+' is blocked from now on');
     return;
   }
@@ -776,13 +1071,13 @@ function action(a,b){
     if(on)toast(info.notifAccess?'SpotiOS starts when Spotify plays':'Allow notification access so SpotiOS can notice Spotify');return;}
   if(a==='notif'){try{AndBridge.openNotificationAccess();}catch(e){}return;}
   if(a==='battery'){try{AndBridge.openBatterySettings();}catch(e){}return;}
-  if(a==='full'){full=true;sync();return;}
-  if(a==='off'){try{AndBridge.setServerMode(false);}catch(e){}W.spoSetServer(false);toast('Server Mode is off');return;}
-  if(a==='relist'){loadList();return;}
+  if(a==='full'){openFull();return;}
+  if(a==='normal'){openSheet('normal');return;}
+  if(a==='relist'){loadList(true);return;}
 }
 
 /* refresh battery and permission rows when coming back from Android settings */
-document.addEventListener('visibilitychange',function(){if(!document.hidden&&shown){info=status();renderSet();renderConn();}});
+document.addEventListener('visibilitychange',function(){if(!realHidden()&&shown){info=status();renderSet();renderConn();}});
 
 /* ---------- back button: sheet, then full Spotify back to the Server screen ---------- */
 var prevBack=W.spoBack;
@@ -791,20 +1086,21 @@ W.spoBack=function(){
   if(want()){try{AndBridge.moveToBack();return true;}catch(e){return false;}}
   if(W.__spoServer&&full){
     if(prevBack&&prevBack())return true;
-    full=false;sync();return true;
+    backToServer();return true;
   }
   return prevBack?prevBack():false;
 };
 
 W.spoSetServer=function(on){
-  W.__spoServer=!!on;full=false;
-  if(on){log('Server Mode on','good');S.devAt=0;}
+  W.__spoServer=!!on;W.__spoKeepVisible=!!on;full=false;
+  if(on){log('Server Mode on','good');S.pollAt=0;}
   sync();
-  if(!on){var p=byId('ss-pill');if(p)p.classList.remove('show');}
 };
-W.spoServerOpen=function(){full=false;sync();};
+W.spoServerOpen=function(){backToServer();};
 W.spoServerShown=function(){return shown;};
 sync();
+/* the tab bar can be built after us */
+setTimeout(syncReturn,1500);setTimeout(syncReturn,4000);
 })();
 """
 }

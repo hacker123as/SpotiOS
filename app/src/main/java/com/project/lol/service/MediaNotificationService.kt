@@ -78,6 +78,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         const val ACTION_WIDGET_REFRESH = "com.project.lol.ACTION_WIDGET_REFRESH"
         /** Server Mode: turn it off (notification action). */
         const val ACTION_SERVER_OFF = "com.project.lol.ACTION_SERVER_OFF"
+        const val ACTION_SERVER_REPOST = "com.project.lol.ACTION_SERVER_REPOST"
+        private const val SERVER_IDLE_MS = 2 * 60_000L
         /** Server Mode: start the player without a screen (Spotify opened, or a notification). */
         const val ACTION_SERVER_START = "com.project.lol.ACTION_SERVER_START"
         /** Server Mode: the Spotify app just showed up; check auto-connect now. */
@@ -226,6 +228,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     /** ready, connecting, reconnecting, offline, signin or starting: drives the idle server notification. */
     private var connLabel = "starting"
     private var lastServerNotif = ""
+    /** When playback last stopped; after SERVER_IDLE_MS the Server notification replaces the media one. */
+    private var pausedSince = 0L
     private val playerRestarts = ArrayDeque<Long>()
     private val keepAliveTick = object : Runnable {
         override fun run() {
@@ -240,16 +244,19 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     private val actionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                ACTION_PLAY_PAUSE -> {
-                    webView?.evaluateJavascript("actPlayPause(${!isPlaying})", null)
-                }
-                ACTION_NEXT -> webView?.evaluateJavascript("actSkipForward()", null)
-                ACTION_PREV -> webView?.evaluateJavascript("actSkipBack()", null)
-                ACTION_SHUFFLE -> webView?.evaluateJavascript("actToggleShuffle()", null)
-                ACTION_REPEAT -> webView?.evaluateJavascript("actRepeat()", null)
-                ACTION_FAVORITE -> webView?.evaluateJavascript("actAddToFav()", null)
+                ACTION_PLAY_PAUSE -> wakeAndRun("actPlayPause(${!isPlaying})")
+                ACTION_NEXT -> wakeAndRun("actSkipForward()")
+                ACTION_PREV -> wakeAndRun("actSkipBack()")
+                ACTION_SHUFFLE -> wakeAndRun("actToggleShuffle()")
+                ACTION_REPEAT -> wakeAndRun("actRepeat()")
+                ACTION_FAVORITE -> wakeAndRun("actAddToFav()")
                 ACTION_WIDGET_REFRESH -> pushWidgetState(force = true)
                 ACTION_SERVER_OFF -> ServerMode.setOn(this@MediaNotificationService, false)
+                // The Server notification was swiped away: Server Mode is still on, so bring it back.
+                ACTION_SERVER_REPOST -> if (ServerMode.isOn(this@MediaNotificationService)) {
+                    lastServerNotif = ""
+                    mainHandler.postDelayed({ showNotification() }, 1_500L)
+                }
             }
         }
     }
@@ -448,6 +455,14 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         Logger.i(TAG, "media service ready: session, notification and receivers up")
     }
 
+    /** The Spotify app just showed its notification: check now whether to take the music over. */
+    fun onSpotifySeen() {
+        mainHandler.post {
+            PlayerHost.keepVisible()
+            player()?.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('spotify')", null)
+        }
+    }
+
     /** The page the service talks to: the screen's player, or the server's own when there's no screen. */
     private fun player(): WebView? = webView ?: PlayerHost.webView
 
@@ -459,11 +474,13 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         if (on) {
             refreshServerLocks()
             registerNetworkWatch()
+            ServerWatchdog.schedule(this)
             if (changed) Logger.i(TAG, "server mode on")
             ensurePlayer("server on")
         } else {
             releaseServerLocks()
             unregisterNetworkWatch()
+            ServerWatchdog.cancel(this)
             if (changed) Logger.i(TAG, "server mode off")
             if (PlayerHost.isHeadless) {
                 // Nothing on screen and the server is off: stop everything.
@@ -497,6 +514,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         Logger.i(TAG, "starting the server player without a screen ($reason)")
         val bridge = PlayerHost.bridge?.also { it.attach(null) } ?: com.project.lol.bridge.SpotifyBridge(WeakReference(null))
         webView = PlayerHost.create(applicationContext, bridge, null, PlayerHost.PLAYER_URL)
+        PlayerHost.keepVisible()
         connLabel = "connecting"
     }
 
@@ -545,6 +563,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             headlessHooks.onHeadlessLoginRequired()
             return
         }
+        if (server) PlayerHost.keepVisible()
         val js = "(function(){try{return window.spoKeepAlive?window.spoKeepAlive($server,'$reason'):'';}catch(e){return '';}})()"
         wv.evaluateJavascript(js) { raw -> onKeepAliveReport(raw) }
     }
@@ -564,20 +583,37 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         connLabel = when {
             !o.optBoolean("signedIn", true) -> "signin"
             !o.optBoolean("online", true) -> "offline"
+            o.optBoolean("listed") -> "ready"
             state == 1 && msgAgo in 0..75_000 -> "ready"
-            state == 0 -> "connecting"
-            o.optString("did") == "reload" -> "reconnecting"
-            else -> "reconnecting"
+            o.optString("did") == "reload" || o.optString("did") == "reconnect" -> "reconnecting"
+            // Closed after having been open: Spotify is reconnecting it.
+            state == 3 -> "reconnecting"
+            // Still opening, or not seen yet (the page is starting): not a dropped connection.
+            else -> "connecting"
         }
         if (o.optString("did").isNotEmpty()) Logger.i(TAG, "keepalive: ${o.optString("did")} ($text)")
         updateServerNotification()
     }
 
     private fun updateServerNotification() {
-        if (!ServerMode.isOn(this) || currentTitle.isNotEmpty()) return
-        if (lastServerNotif == connLabel) return
-        lastServerNotif = connLabel
-        showNotification()
+        if (!ServerMode.isOn(this)) return
+        val idle = serverIdle()
+        val key = if (idle) "$connLabel|idle|$currentTitle" else "playing"
+        if (lastServerNotif == key) return
+        lastServerNotif = key
+        // While a song is playing (or just paused) the media notification stays as it is.
+        if (idle) showNotification()
+    }
+
+    /**
+     * Server Mode with nothing playing for a while. Android drops a paused media notification
+     * from the shade after about 10 minutes, which made the server look gone, so after
+     * [SERVER_IDLE_MS] the plain Server notification takes its place.
+     */
+    private fun serverIdle(): Boolean {
+        if (currentTitle.isEmpty()) return true
+        if (isPlaying || pausedSince == 0L) return false
+        return System.currentTimeMillis() - pausedSince > SERVER_IDLE_MS
     }
 
     private fun refreshServerLocks() {
@@ -660,9 +696,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         }
         when (intent?.action) {
             ACTION_SERVER_START -> mainHandler.post { ensurePlayer("start request") }
-            ACTION_SPOTIFY_SEEN -> mainHandler.post {
-                player()?.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('spotify')", null)
-            }
+            ACTION_SPOTIFY_SEEN -> onSpotifySeen()
             // Restarted by Android after it killed the app: bring the server back.
             null -> if (server) mainHandler.post { ensurePlayer("restarted by Android") }
         }
@@ -894,6 +928,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             addAction(ACTION_FAVORITE)
             addAction(ACTION_WIDGET_REFRESH)
             addAction(ACTION_SERVER_OFF)
+            addAction(ACTION_SERVER_REPOST)
             addAction(Intent.ACTION_MEDIA_BUTTON)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -943,7 +978,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
                 mediaSession.controller.transportControls.pause()
             } catch (_: Exception) {}
         }
-        webView?.evaluateJavascript("actPlayPause(false)", null)
+        player()?.evaluateJavascript("actPlayPause(false)", null)
     }
 
     private fun resumePlayback() {
@@ -955,7 +990,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
                 mediaSession.controller.transportControls.play()
             } catch (_: Exception) {}
         }
-        webView?.evaluateJavascript("actPlayPause(true)", null)
+        player()?.evaluateJavascript("actPlayPause(true)", null)
     }
 
     fun updateFromMediaStatus(json: String) {
@@ -976,6 +1011,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             }
 
             isPlaying = obj.optBoolean("playing", false)
+            if (isPlaying) pausedSince = 0L else if (pausedSince == 0L) pausedSince = System.currentTimeMillis()
+            if (isPlaying) lastServerNotif = ""
             isFavorite = obj.optBoolean("fav", false)
             isRepeat = obj.optString("repeat", "false")
             val shuffleVal = obj.optString("shuffle", "off")
@@ -1155,7 +1192,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val server = ServerMode.isOn(this)
-        if (server && currentTitle.isEmpty()) return buildServerNotification(contentIntent)
+        if (server && serverIdle()) return buildServerNotification(contentIntent)
 
         val prevAction = NotificationCompat.Action.Builder(
             tintedIcon(R.drawable.ic_skip_prev), getString(R.string.notif_action_previous), getActionPendingIntent(ACTION_PREV)
@@ -1213,6 +1250,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             .setColor(accent())
             .setStyle(buildMediaStyle(isShuffleAvailable))
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+        if (server) builder.setDeleteIntent(getActionPendingIntent(ACTION_SERVER_REPOST))
         actions.forEach { builder.addAction(it) }
 
         coverBitmap?.let { builder.setLargeIcon(it) }
@@ -1234,20 +1272,33 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         val off = NotificationCompat.Action.Builder(
             tintedIcon(R.drawable.ic_pause), getString(R.string.server_notif_turn_off), getActionPendingIntent(ACTION_SERVER_OFF)
         ).build()
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        // Paused for a while: say what was playing and offer to carry on.
+        val paused = currentTitle.isNotEmpty()
+        val last = if (paused) getString(R.string.server_notif_paused, listOf(currentTitle, currentArtist).filter { it.isNotBlank() }.joinToString(" · ")) else ""
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.server_title))
             .setContentText(text)
             .setSubText(if (connLabel == "ready") getString(R.string.server_notif_live) else null)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(contentIntent)
+            .setDeleteIntent(getActionPendingIntent(ACTION_SERVER_REPOST))
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setColor(accent())
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .addAction(off)
-            .build()
+        if (paused) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(text + "\n" + last))
+            coverBitmap?.let { builder.setLargeIcon(it) }
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    tintedIcon(R.drawable.ic_play), getString(R.string.server_notif_resume), getActionPendingIntent(ACTION_PLAY_PAUSE)
+                ).build()
+            )
+        }
+        return builder.addAction(off).build()
     }
 
     private fun getActionPendingIntent(action: String): PendingIntent {

@@ -28,11 +28,14 @@ class SpotifyWatcher : NotificationListenerService() {
     }
 
     private fun seen() {
-        if (!ServerMode.isOn(this) || !ServerMode.startWithSpotify(this)) return
-        // Spotify updates its notification every few seconds while playing; react to the
-        // first one and then at most every 20 s.
+        if (!ServerMode.isOn(this)) return
+        // A running server always gets told (to take the music over from the default device);
+        // starting a stopped one is what "Start with Spotify" is for.
+        if (MediaNotificationService.instance == null && !ServerMode.startWithSpotify(this)) return
+        // Spotify updates its notification on every play, pause and song change; react at
+        // most every 8 s.
         val now = System.currentTimeMillis()
-        if (now - lastSeenAt < 20_000) return
+        if (now - lastSeenAt < 8_000) return
         lastSeenAt = now
         Logger.i(TAG, "Spotify is active")
         ServerMode.startInBackground(this, "spotify")

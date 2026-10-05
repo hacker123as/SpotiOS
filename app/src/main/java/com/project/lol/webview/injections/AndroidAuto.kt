@@ -175,7 +175,7 @@ window.pendingMediaRequests = window.pendingMediaRequests || new Set();
                             body: JSON.stringify({
                                 variables: { uri: parentId, offset: 0, limit: 100, enableWatchFeedEntrypoint: false },
                                 operationName: 'fetchPlaylist',
-                                extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('fetchPlaylist', '346811f856fb0b7e4f6c59f8ebea78dd081c6e2fb01b77c954b26259d5fc6763') } }
+                                extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('fetchPlaylist', '8964e8eafb21aa992a7d951d256d83285c04be2105d209262901de70cb97584a') } }
                             })
                         });
                         if (!resp.ok) throw new Error('Failed to fetch playlist: ' + resp.statusText);
@@ -212,7 +212,7 @@ window.pendingMediaRequests = window.pendingMediaRequests || new Set();
                             body: JSON.stringify({
                                 variables: { uri: 'spotify:album:' + albumId, locale: '', offset: 0, limit: 100 },
                                 operationName: 'getAlbum',
-                                extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('getAlbum', 'b9bfabef66ed756e5e13f68a942deb60bd4125ec1f1be8cc42769dc0259b4b10') } }
+                                extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('getAlbum', '6a74b456cd1735c9193d9e8ec8cc5184cad7ce13572210315229db3975964361') } }
                             })
                         });
                         if (!resp.ok) throw new Error('Failed to fetch album: ' + resp.statusText);
@@ -246,7 +246,7 @@ window.pendingMediaRequests = window.pendingMediaRequests || new Set();
                             body: JSON.stringify({
                                 variables: { uri: 'spotify:artist:' + artistId, locale: '' },
                                 operationName: 'queryArtistOverview',
-                                extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('queryArtistOverview', '5b9e64f43843fa3a9b6a98543600299b0a2cbbbccfdcdcef2402eb9c1017ca4c') } }
+                                extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('queryArtistOverview', '9f8134e565e78621f1e1793555bd6633c5ac144ae0f89604ed3ae3f80b3c8e6') } }
                             })
                         });
                         if (!resp.ok) throw new Error('Failed to fetch artist: ' + resp.statusText);
@@ -308,7 +308,7 @@ window.pendingMediaRequests = window.pendingMediaRequests || new Set();
                         body: JSON.stringify({
                             variables: { searchTerm: query, offset: 0, limit: 30, numberOfTopResults: 5, includeAudiobooks: false, includeArtistHasConcertsField: false, includePreReleases: false, includeLocalConcertsField: false, includeAuthors: false },
                             operationName: 'searchDesktop',
-                            extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('searchDesktop', '4801118d4a100f756e833d33984436a3899cff359c532f8fd3aaf174b60b3b49') } }
+                            extensions: { persistedQuery: { version: 1, sha256Hash: window.getGqlHash('searchDesktop', 'eef7cc54888d91bdd6802623477873caa3948ae173a0c34fd86827b267e94c03') } }
                         })
                     });
                     if (!resp.ok) throw new Error('Search failed: ' + resp.statusText);
