@@ -107,10 +107,19 @@ object SettingsFix {
 
             interceptAll();
 
-            var obs = new MutationObserver(function() { interceptAll(); });
-            obs.observe(document.documentElement, {
-                childList: true, subtree: true
+            // Spotify mutates the DOM many times a second (progress bar, lists), so
+            // coalesce: at most one page-wide scan every 400ms.
+            var pending = false;
+            var obs = new MutationObserver(function() {
+                if (pending) return;
+                pending = true;
+                setTimeout(function(){ pending = false; interceptAll(); }, 400);
             });
+            function startObs(){
+                if (!document.documentElement) { setTimeout(startObs, 50); return; }
+                obs.observe(document.documentElement, { childList: true, subtree: true });
+            }
+            startObs();
         })();
     """
 }

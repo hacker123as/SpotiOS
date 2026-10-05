@@ -60,7 +60,6 @@ html.spo body::before{
     radial-gradient(44vmax 44vmax at 88% 18%,rgba(94,92,230,.22),transparent 70%),
     radial-gradient(40vmax 40vmax at 30% 78%,rgba(100,210,255,.09),transparent 70%),
     radial-gradient(48vmax 48vmax at 78% 96%,rgba(255,55,95,.12),transparent 70%);
-  animation:spoAurora 46s ease-in-out infinite alternate;will-change:transform;
 }
 @keyframes spoAurora{
   0%{transform:translate3d(0,0,0) rotate(0deg) scale(1)}
@@ -69,12 +68,15 @@ html.spo body::before{
 }
 /* album-art wallpaper: the playing cover, heavily blurred, behind the aurora's colours */
 html.spo-artwall body::after{
-  content:"";position:fixed;inset:-12vmax;z-index:-1;pointer-events:none;
+  content:"";position:fixed;left:50%;top:50%;width:40vmax;height:40vmax;margin:-20vmax 0 0 -20vmax;z-index:-1;pointer-events:none;
   background:var(--spo-art,none) center/cover no-repeat;
-  filter:blur(90px) saturate(165%) brightness(.42);opacity:.9;
+  filter:blur(18px) saturate(165%) brightness(.42);opacity:.9;transform:scale(3.4);
 }
 html.spo-lite.spo-artwall body::after,html.spo-artwall:has(#spotilol-amoled-theme) body::after{display:none!important}
 html.spo #main,html.spo .Root,html.spo .Root__top-container{background:transparent!important}
+html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1{font-size:0!important}
+html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1>*{display:none!important}
+html.spl-libopen #Desktop_LeftSidebar_Id header>div>div:first-child h1::after{content:"\2716\00a0\00a0Close Library";font-size:16px;font-weight:700}
 html.spo .Root__main-view{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 260px)!important;border-radius:26px 26px 0 0!important}
 html.spo :is(.main-view-container,.main-view-container__scroll-node,[data-testid=main-view-container]){background:transparent!important}
 html.spo :is(#main-view,.Root__main-view) main{padding-bottom:var(--spo-dock)!important}
@@ -152,7 +154,7 @@ html.spo [data-tippy-root] [role=menu] :is(hr,[role=separator]){border:0!importa
 }
 @keyframes spoUp{from{transform:translate3d(0,40px,0);opacity:0}to{transform:none;opacity:1}}
 #spoScrim{position:fixed;inset:0;z-index:2147483600;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .25s}
-html:has([data-tippy-root] [role=menu]) #spoScrim{opacity:1}
+html.spo-menu #spoScrim{opacity:1}
 html.spo .ReactModal__Overlay{background:rgba(0,0,0,.42)!important;backdrop-filter:blur(14px)!important;-webkit-backdrop-filter:blur(14px)!important}
 html.spo .ReactModal__Content{background:rgba(30,30,36,.78)!important;backdrop-filter:blur(40px) saturate(200%)!important;-webkit-backdrop-filter:blur(40px) saturate(200%)!important;border:0!important;border-radius:28px!important;box-shadow:var(--spo-rim),var(--spo-drop)!important;overflow:hidden!important;max-width:calc(100vw - 20px)!important}
 html.spo [data-testid=lyrics-container],html.spo :has(>[data-testid=fullscreen-lyric]){--lyrics-color-active:#fff!important;--lyrics-color-inactive:rgba(255,255,255,.34)!important;--lyrics-color-passed:rgba(255,255,255,.58)!important}
@@ -211,7 +213,7 @@ html.spo-tabs #spoTabs{display:flex}
 #spoTabs button svg{width:24px;height:24px}
 #spoTabs button.on{color:var(--spo-accent);background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
 #spoTabs button:active{transform:scale(.88)}
-html.spo-np-open #spoTabs,html:has([data-tippy-root] [role=menu]) #spoTabs{transform:translate3d(0,150%,0);opacity:0}
+html.spo-np-open #spoTabs,html.spo-menu #spoTabs{transform:translate3d(0,150%,0);opacity:0}
 
 /* ---------- Now Playing sheet ---------- */
 #spoNP{
@@ -827,6 +829,37 @@ window.spoShare=function(){
   },true);
 })();
 
+/* ---------- recover from Spotify's "Something went wrong" ----------
+   Spotify swaps the main view for an error screen when one of its own views
+   throws. A route change remounts that view, so go Home quietly (playback keeps
+   going) instead of making people press "Reload page". Rate-limited so a page
+   that keeps failing ends up on the normal reload button. */
+var crashAt=[];
+function crashScreen(){
+  var mv=qs('.Root__main-view')||qs('#main-view');if(!mv)return null;
+  var b=mv.querySelector('button');if(!b||mv.querySelector('[data-testid=tracklist-row],[data-encore-id=card]'))return null;
+  if(!/reload|neu laden|recargar|recarregar|ricarica|recharger|odśwież/i.test(txt(b)))return null;
+  if(!/went wrong|error|fehler|erro|errore|erreur|błąd|algo sali/i.test(mv.textContent||''))return null;
+  return b;
+}
+function recoverCrash(){
+  var b=crashScreen();if(!b)return;
+  var now=Date.now();crashAt=crashAt.filter(function(t){return now-t<60000;});
+  if(crashAt.length>=2){
+    var playing=false;try{playing=!!(window.splIsPlaying&&window.splIsPlaying());}catch(e){}
+    if(!playing&&crashAt.length<3){crashAt.push(now);b.click();}
+    return;
+  }
+  crashAt.push(now);
+  try{AndBridge.dbg('w','main view crashed at '+location.pathname+', recovering');}catch(e){}
+  var target=location.pathname==='/'?'/search':'/';
+  var back=location.pathname+location.search;
+  var h=qs('[data-testid=home-button]');
+  if(target==='/'&&h)h.click();
+  else{try{history.pushState({},'',target);dispatchEvent(new PopStateEvent('popstate',{state:{}}));}catch(e){}}
+  if(back!=='/'&&back!=='/search')setTimeout(function(){try{history.pushState({},'',back);dispatchEvent(new PopStateEvent('popstate',{state:{}}));}catch(e){}},900);
+}
+
 /* ---------- back button ---------- */
 window.spoBack=function(){
   if(sheetOpen){closeSheet();return true;}
@@ -886,6 +919,9 @@ boot();
 setInterval(function(){
   eosCheck();
   if(window.__splBg)return;
+  var mo=!!qs('[data-tippy-root] [role=menu]');
+  if(root().classList.contains('spo-menu')!==mo)root().classList.toggle('spo-menu',mo);
+  recoverCrash();
   artWall();
   hookPlayer();
   if(window.__spoTabs!==false)buildTabs();

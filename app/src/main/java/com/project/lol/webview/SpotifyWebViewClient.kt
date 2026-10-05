@@ -63,6 +63,12 @@ class SpotifyWebViewClient(
             onPageFinishedClean(view, ClassicLoginButton.CONTENT)
         }
 
+        if (url.startsWith("https://accounts.spotify.com/") && Regex("""/status/?(\?|$)""").containsMatchIn(url)) {
+            Logger.s(TAG, "route: login status page, going to the web player")
+            onPageFinishedClean(view, LoginDetection.CONTENT)
+            return
+        }
+
         val loggedIn = view.context.getSharedPreferences("spotilol_prefs", 0)
             .getBoolean("LoggedIn", false)
 
@@ -158,6 +164,7 @@ class SpotifyWebViewClient(
             add(if (isGoogle) GoogleSpoof.CONTENT else BrowserSpoof.CONTENT)
             add(FetchOverride.CONTENT)
             add(AdStateHook.CONTENT)
+            add(AdCleaner.CONTENT)
             if (blockSW) add(WorkerNeutralize.CONTENT)
             add(GaBlocker.CONTENT)
             add(PowerSave.CONTENT)

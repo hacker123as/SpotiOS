@@ -171,6 +171,10 @@ class SplashActivity : ComponentActivity() {
             LaunchedEffect(checkTrigger) {
                 if (checkTrigger == 0) return@LaunchedEffect
                 withContext(Dispatchers.IO) {
+                    // Proxy (CA certificate) mode is retired; move anyone still on it to normal.
+                    if (prefs.getString("ConnectionMode", "normal") == "proxy") {
+                        prefs.edit().putString("ConnectionMode", "normal").apply()
+                    }
                     if (prefs.getString("ConnectionMode", "normal") == "proxy") {
                         LocalProxyManager.init(this@SplashActivity)
                         LocalProxyManager.start()
@@ -606,14 +610,6 @@ private fun OnboardingPhase(
                     description = stringResource(R.string.splash_onboarding_mode_normal_desc),
                     selected = mode == "normal",
                     onClick = { onMode("normal") }
-                )
-                OnboardingMode(
-                    modifier = Modifier.weight(1f),
-                    icon = TablerIcons.ShieldLock,
-                    title = stringResource(R.string.splash_onboarding_mode_cert_title),
-                    description = stringResource(R.string.splash_onboarding_mode_cert_desc),
-                    selected = mode == "proxy",
-                    onClick = { onMode("proxy") }
                 )
             }
             Spacer(Modifier.height(26.dp))

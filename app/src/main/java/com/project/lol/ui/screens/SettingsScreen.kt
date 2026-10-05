@@ -852,7 +852,7 @@ fun SettingsContent(
                 }
             }
 
-            if (settingsTab == SettingsTab.Advanced) {
+            if (settingsTab == SettingsTab.Advanced && connectionMode == "proxy") {
                 SettingSectionCard(
                     title = stringResource(R.string.settings_section_connection_mode),
                     icon = TablerIcons.Shield
@@ -869,7 +869,9 @@ fun SettingsContent(
                         onClick = { showConnectionModeDialog = true }
                     )
                 }
+            }
 
+            if (settingsTab == SettingsTab.Advanced) {
                 SettingSectionCard(
                     title = stringResource(R.string.settings_section_system),
                     icon = TablerIcons.Power
