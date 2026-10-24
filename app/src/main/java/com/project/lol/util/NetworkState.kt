@@ -6,6 +6,13 @@ import android.net.NetworkCapabilities
 
 object NetworkState {
 
+    /** Told when the network comes back (the media service watches it); the screen retries a failed page. */
+    @Volatile var onBack: (() -> Unit)? = null
+
+    fun notifyBack() {
+        runCatching { onBack?.invoke() }
+    }
+
     /** True when the active network is up and Android has confirmed it reaches the internet. */
     fun isOnline(context: Context): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager

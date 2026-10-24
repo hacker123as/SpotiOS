@@ -75,6 +75,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -144,12 +145,17 @@ import com.project.lol.ui.components.mapWebViewError
 import com.project.lol.webview.helpers.AccentTheme
 import com.project.lol.webview.helpers.LiquidGlassTheme
 import java.util.Locale
+import com.project.lol.util.NetworkState
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity(), PlayerHost.Owner {
 
     companion object {
         private const val TAG = "main"
+        /** Away at least this long and the page gets checked when SpotiOS comes back. */
+        private const val STALE_CHECK_AFTER_MS = 2 * 60_000L
+        /** Away this long and an idle page is reloaded even if it looks fine. */
+        private const val RELOAD_AFTER_MS = 3 * 60 * 60_000L
     }
 
     private var webView: WebView? = null
@@ -189,6 +195,11 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
     private val loadingProgress = mutableIntStateOf(100)
     private val blockServiceWorkerState = mutableStateOf(true)
     private val webViewError = mutableStateOf<Pair<Int, String>?>(null)
+    /** Bumped to build a fresh player after the old one's page crashed (the view is keyed on it). */
+    private val playerGen = mutableIntStateOf(0)
+    /** When the screen went to the background; a long time away triggers the stale-page check. */
+    private var stoppedAt = 0L
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingLink: String? = null
     /** A user script waiting for the installer: a .user.js link, a shared Greasy Fork page or a .js file. */
     private val pendingScript = mutableStateOf<String?>(null)
@@ -486,6 +497,7 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
                                 DownloadManager.downloadCollection(this@MainActivity, payload)
                             }
 
+                            key(playerGen.intValue) {
                             AndroidView(
                                 factory = { context ->
                                     val kept = PlayerHost.adopt(this@MainActivity, this@MainActivity)
@@ -515,6 +527,7 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
                                     .fillMaxSize()
                                     .background(MaterialTheme.colorScheme.background)
                             )
+                            }
 
                             LaunchedEffect(webView) {
                                 webView?.let { startMediaService() }
@@ -554,7 +567,8 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
                                     errorDescription = desc,
                                     onRetry = {
                                         webViewError.value = null
-                                        webView?.reload()
+                                        val wv = webView
+                                        if (wv != null) wv.reload() else playerGen.intValue++
                                     }
                                 )
                             }
@@ -649,10 +663,30 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
         view.loadUrl(PlayerHost.LOGIN_URL)
     }
 
+    /**
+     * The page's renderer died (Android reclaimed its memory, or it crashed). This used to leave
+     * a dead, blank player until SpotiOS was reopened: build a new one right away, and play on
+     * if music was playing.
+     */
     override fun onPlayerRendererGone() {
         webViewError.value = null
+        val wasPlaying = MediaNotificationService.instance?.playedRecently() == true
         destroyWebView()
+        if (isFinishing || isDestroyed) return
+        val now = System.currentTimeMillis()
+        rendererCrashes.removeAll { now - it > 5 * 60_000L }
+        rendererCrashes.add(now)
+        if (rendererCrashes.size > 3) {
+            Logger.w(TAG, "player keeps crashing, waiting for Retry")
+            webViewError.value = -100 to "The player stopped working"
+            return
+        }
+        Logger.w(TAG, "player renderer gone, building a new one (play on=$wasPlaying)")
+        PlayerHost.resumeOnLoad = wasPlaying
+        mainHandler.postDelayed({ if (!isFinishing && !isDestroyed) playerGen.intValue++ }, 400L)
     }
+
+    private val rendererCrashes = ArrayDeque<Long>()
 
     override fun onPlayerError(code: Int, description: String) {
         webViewError.value = code to description
@@ -1402,8 +1436,18 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        PlayerHost.screenVisible = true
+        // A page that failed to load while offline loads by itself once the network is back.
+        NetworkState.onBack = { mainHandler.postDelayed({ retryFailedPage("network back") }, 1_500L) }
+    }
+
     override fun onStop() {
         super.onStop()
+        PlayerHost.screenVisible = false
+        stoppedAt = System.currentTimeMillis()
+        NetworkState.onBack = null
         Logger.i(TAG, "activity stopped: suspending webview loops")
         webView?.evaluateJavascript("""
             try {
@@ -1468,6 +1512,56 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
                 }
             }
         }
+        val away = if (stoppedAt > 0) System.currentTimeMillis() - stoppedAt else 0L
+        stoppedAt = 0L
+        if (!retryFailedPage("resumed") && away > STALE_CHECK_AFTER_MS) checkStalePage(away)
+    }
+
+    /** Reloads a page that failed to load (the error screen) if the phone is online now. */
+    private fun retryFailedPage(why: String): Boolean {
+        if (webViewError.value == null || !NetworkState.isOnline(this)) return false
+        Logger.i(TAG, "retrying the failed page ($why)")
+        webViewError.value = null
+        val wv = webView
+        if (wv != null) wv.reload() else playerGen.intValue++
+        return true
+    }
+
+    /**
+     * Back after a while away: Spotify's page could have gone stale (its own error screen, the
+     * connection to Spotify dead for minutes, SpotiOS's controls never came in), which used to
+     * need a manual reload. Reload it quietly then, and after a long time away even if it looks
+     * fine, but never while music plays or right after a link was opened.
+     */
+    private fun checkStalePage(away: Long) {
+        val wv = webView ?: return
+        if (System.currentTimeMillis() - lastLinkAt < 15_000L) return
+        if (MediaNotificationService.instance?.playedRecently() == true) return
+        wv.evaluateJavascript("(function(){try{return window.spoHealth?window.spoHealth():'';}catch(e){return '';}})()") { raw ->
+            val text = runCatching { org.json.JSONTokener(raw ?: "").nextValue() as? String }.getOrNull()
+            val host = runCatching { Uri.parse(wv.url ?: "").host }.getOrNull()
+            if (text.isNullOrEmpty()) {
+                // No guard on the page: a blank or half-loaded player.
+                if (host == "open.spotify.com" && NetworkState.isOnline(this)) {
+                    Logger.i(TAG, "stale page: nothing loaded, reloading")
+                    wv.reload()
+                }
+                return@evaluateJavascript
+            }
+            val o = runCatching { org.json.JSONObject(text) }.getOrNull() ?: return@evaluateJavascript
+            if (o.optString("host") != "open.spotify.com" || o.optBoolean("playing")) return@evaluateJavascript
+            if (!o.optBoolean("online", true) || !NetworkState.isOnline(this)) return@evaluateJavascript
+            val reason = when {
+                o.optBoolean("crash") -> "Spotify's error screen"
+                !o.optBoolean("late") -> "SpotiOS never loaded"
+                !o.optBoolean("main") -> "no page"
+                o.optInt("ws", -1) == 3 && o.optLong("closedAgo", -1) > 120_000L -> "connection to Spotify dead"
+                away > RELOAD_AFTER_MS -> "away ${away / 3_600_000L} h"
+                else -> null
+            } ?: return@evaluateJavascript
+            Logger.i(TAG, "stale page ($reason), reloading")
+            wv.reload()
+        }
     }
 
     /** Whether [intent] came from the "SpotiOS X is ready" notification; clears the flag. */
@@ -1531,7 +1625,10 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
         }
     }
 
+    private var lastLinkAt = 0L
+
     private fun navigateSpotifyLink(link: String) {
+        lastLinkAt = System.currentTimeMillis()
         Logger.i(TAG, "navigate to spotify link: $link")
         val wv = webView ?: run {
             pendingLink = link

@@ -71,6 +71,12 @@ object PlayerHost {
 
     val isHeadless: Boolean get() = webView != null && owner?.get() == null
 
+    /** Set when the player is rebuilt while music played; the new page plays on (PlaybackGuard). */
+    @Volatile var resumeOnLoad = false
+
+    /** Whether SpotiOS's screen is on show (started); the media service only reloads a dead page while it isn't. */
+    @Volatile var screenVisible = false
+
     /** How many MainActivity screens exist; the media service only builds a player when there are none. */
     @Volatile var screens = 0
 

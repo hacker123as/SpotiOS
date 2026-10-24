@@ -180,6 +180,7 @@ class SpotifyWebViewClient(
             add(FetchOverride.CONTENT)
             add(AdStateHook.CONTENT)
             add(ConnectKeepAlive.CONTENT)
+            add(PlaybackGuard.CONTENT)
             add(AdCleaner.CONTENT)
             if (blockSW) add(WorkerNeutralize.CONTENT)
             add(GaBlocker.CONTENT)

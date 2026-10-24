@@ -440,6 +440,11 @@ html.spo #main-view::after{
   background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.72) 40%,rgba(0,0,0,.96));
 }
 html.spo-lite #main-view::after{display:none!important}
+/* the keyboard is up: the page shrinks to the space above it, and the mini player, tab bar and
+   bottom fade used to ride up with it and cover the search box and its results */
+html.spo-kb #spoTabs,html.spo-kb #spotilolPlayerControls,html.spo-kb #spoOffline,html.spo-kb #spl-dl-progress{opacity:0!important;pointer-events:none!important;transform:translate3d(0,40px,0)!important;transition:opacity .15s,transform .15s!important}
+html.spo-kb #main-view::after{display:none!important}
+html.spo-kb #main-view main{padding-bottom:16px!important}
 /* the sticky top bar: transparent at the top of a page, dark glass once Spotify fades it in on scroll */
 html.spo [data-testid=topbar-content]{background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-radius:0!important}
 html.spo header[data-testid=topbar]{pointer-events:none}
@@ -1575,6 +1580,25 @@ function artWall(){
   root().__spoArt=s;
   root().style.setProperty('--spo-art','url("'+s.replace(/"/g,'%22')+'")');
 }
+
+/* ---------- keyboard up: hide the bottom bars ---------- */
+(function(){
+  var full=0,fullW=0;
+  function typing(){var a=document.activeElement;return !!(a&&(a.tagName==='INPUT'&&!/^(range|checkbox|radio|button)$/.test(a.type)||a.tagName==='TEXTAREA'||a.isContentEditable));}
+  function check(){
+    /* innerWidth/innerHeight are spoofed to a desktop size (BrowserSpoof): measure the real page */
+    var vv=window.visualViewport,de=document.documentElement;
+    var h=Math.round(vv&&vv.height?vv.height*(vv.scale||1):de.clientHeight)||0,w=de.clientWidth||0;
+    if(w!==fullW){fullW=w;full=h;}
+    if(h>full)full=h;
+    var kb=typing()&&full-h>120;
+    if(root().classList.contains('spo-kb')!==kb)root().classList.toggle('spo-kb',kb);
+  }
+  window.addEventListener('resize',check);
+  document.addEventListener('focusin',function(){setTimeout(check,60);setTimeout(check,400);},true);
+  document.addEventListener('focusout',function(){setTimeout(check,60);},true);
+  check();
+})();
 
 /* ---------- boot ---------- */
 function boot(){

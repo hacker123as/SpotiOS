@@ -30,7 +30,10 @@ object ConnectKeepAlive {
 
   /* ---------- Server Mode: the page always counts as visible ---------- */
   try{window.__spoKeepVisible=!!(window.AndBridge&&typeof AndBridge.isServerMode==='function'&&AndBridge.isServerMode());}catch(e){}
-  function keepVis(){return window.__spoKeepVisible===true||window.__spoServer===true;}
+  /* Also while music plays (window.__spoPlayKeep, set by the media service): Spotify's player
+     logic runs on page timers, and a hidden page's timers get throttled hard, which stalled
+     track changes and let the Connect session lapse with the screen off. */
+  function keepVis(){return window.__spoKeepVisible===true||window.__spoServer===true||window.__spoPlayKeep===true;}
   try{
     var dp=Document.prototype;
     var spoof=function(name,val){
@@ -268,8 +271,9 @@ object ConnectKeepAlive {
     return true;
   }
 
-  /* Called by the media service every 20 s (and right after a network change). */
-  window.spoKeepAlive=function(server,reason){
+  /* Called by the media service every 20 s (and right after a network change). [mayReload]:
+     nobody is looking at the page, so a dead page may be reloaded outside Server Mode too. */
+  window.spoKeepAlive=function(server,reason,mayReload){
     var now=Date.now(),ws=S.ws,st=ws?ws.readyState:-1,did='';
     var online=navigator.onLine!==false;
     var onPlayer=location.hostname==='open.spotify.com';
@@ -290,7 +294,7 @@ object ConnectKeepAlive {
        a reload can't help and would only knock SpotiOS off Spotify Connect again. */
     var down=st===3||(st===-1&&S.opened>0);
     var deadFor=down?(S.lastClose?now-S.lastClose:now-S.since):0;
-    if(server&&down&&deadFor>90000&&online&&onPlayer&&window.spotAuthToken&&!playing()&&mayReload()){
+    if((server||mayReload===true)&&down&&deadFor>90000&&online&&onPlayer&&window.spotAuthToken&&!playing()&&mayReload()){
       did='reload';
       setTimeout(function(){location.reload();},100);
     }

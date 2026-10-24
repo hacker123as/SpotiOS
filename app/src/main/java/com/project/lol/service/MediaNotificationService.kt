@@ -228,6 +228,13 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     @Suppress("DEPRECATION")
     private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private var netCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    @Suppress("DEPRECATION")
+    private var playWifiLock: android.net.wifi.WifiManager.WifiLock? = null
+    /** When music was last seen playing; a network drop shortly after counts as "it was playing". */
+    private var lastPlayingAt = 0L
+    /** When the network went away, and whether music was playing then (to play on once it's back). */
+    private var netLostAt = 0L
+    private var playingAtLoss = false
     private var serverOn = false
     /** ready, connecting, reconnecting, offline, signin or starting: drives the idle server notification. */
     private var connLabel = "starting"
@@ -275,17 +282,15 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         }
     }
 
+    /**
+     * Only logs now. ACL events fire for every Bluetooth device (a watch, a car, a tracker
+     * dropping out of range), not just headphones, and pausing on them stopped the music at
+     * random. Headphones going away is caught by ACTION_AUDIO_BECOMING_NOISY and the audio
+     * route callback below, which only look at real audio outputs.
+     */
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
-            when (intent.action) {
-                BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                    if (prefs.getBoolean("BtAutoPause", true)) autoPauseOnce("acl disconnected")
-                }
-                BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                    if (prefs.getBoolean("BtAutoResume", false)) autoResumeOnce("acl connected")
-                }
-            }
+            btLog("bluetooth ${intent.action?.substringAfterLast('.')} (ignored, audio routes decide)")
         }
     }
 
@@ -455,6 +460,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
             .registerOnSharedPreferenceChangeListener(prefsListener)
         PlayerHost.headless = headlessHooks
+        registerNetworkWatch()
         applyServerMode()
         SoundFx.apply(this)
         mainHandler.postDelayed(keepAliveTick, 5_000L)
@@ -514,13 +520,11 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         serverOn = on
         if (on) {
             refreshServerLocks()
-            registerNetworkWatch()
             ServerWatchdog.schedule(this)
             if (changed) Logger.i(TAG, "server mode on")
             ensurePlayer("server on")
         } else {
             releaseServerLocks()
-            unregisterNetworkWatch()
             ServerWatchdog.cancel(this)
             if (changed) Logger.i(TAG, "server mode off")
             if (PlayerHost.isHeadless) {
@@ -571,6 +575,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         override fun onHeadlessRendererGone() {
             Logger.w(TAG, "server player renderer gone, restarting it")
             webView = null
+            if (isPlaying || System.currentTimeMillis() - lastPlayingAt < 20_000L) PlayerHost.resumeOnLoad = true
             connLabel = "reconnecting"
             mainHandler.postDelayed({ ensurePlayer("renderer gone") }, 3_000L)
         }
@@ -604,8 +609,11 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             headlessHooks.onHeadlessLoginRequired()
             return
         }
-        if (server) PlayerHost.keepVisible()
-        val js = "(function(){try{return window.spoKeepAlive?window.spoKeepAlive($server,'$reason'):'';}catch(e){return '';}})()"
+        val playKeep = isPlaying || (lastPlayingAt > 0 && System.currentTimeMillis() - lastPlayingAt < 60_000L)
+        if (isPlaying) acquireWakeLock()
+        if (server || playKeep) PlayerHost.keepVisible()
+        val mayReload = server || (!PlayerHost.screenVisible && !isPlaying)
+        val js = "(function(){try{window.__spoPlayKeep=$playKeep;return window.spoKeepAlive?window.spoKeepAlive($server,'$reason',$mayReload):'';}catch(e){return '';}})()"
         wv.evaluateJavascript(js) { raw -> onKeepAliveReport(raw) }
     }
 
@@ -690,19 +698,28 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         wifiLock = null
     }
 
-    /** When the phone switches networks, check the Spotify connection right away instead of at the next tick. */
+    /**
+     * When the phone loses or switches networks (Wi-Fi drops, Wi-Fi to mobile data, a VPN), check
+     * the Spotify connection right away instead of at the next tick, and if music was playing
+     * when the network went away, play on once it's back (Spotify's web player just stops).
+     */
     private fun registerNetworkWatch() {
         if (netCallback != null) return
         val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return
         val cb = object : android.net.ConnectivityManager.NetworkCallback() {
-            private var first = true
+            // Android reports the current network right away; that one isn't a change.
+            private var first = cm.activeNetwork != null
+            @Volatile private var current: android.net.Network? = null
             override fun onAvailable(network: android.net.Network) {
+                current = network
                 if (first) { first = false; return }
-                Logger.i(TAG, "network changed, checking the Spotify connection")
-                mainHandler.postDelayed({ keepAlive("net") }, 2_000L)
+                mainHandler.post { onNetworkBack() }
             }
             override fun onLost(network: android.net.Network) {
-                Logger.i(TAG, "network lost")
+                // Only the default network going away with nothing in its place counts.
+                if (current != null && network != current) return
+                current = null
+                mainHandler.post { onNetworkLost() }
             }
         }
         try {
@@ -711,6 +728,31 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         } catch (e: Exception) {
             Logger.e(TAG, "network watch failed", e)
         }
+    }
+
+    /** Whether music is playing or was a moment ago (the screen rebuilding a crashed page plays on then). */
+    fun playedRecently(): Boolean = isPlaying || (lastPlayingAt > 0 && System.currentTimeMillis() - lastPlayingAt < 20_000L)
+
+    private fun onNetworkLost() {
+        val now = System.currentTimeMillis()
+        netLostAt = now
+        playingAtLoss = isPlaying || (lastPlayingAt > 0 && now - lastPlayingAt < 20_000L)
+        Logger.i(TAG, "network lost (playing=$playingAtLoss)")
+    }
+
+    private fun onNetworkBack() {
+        val now = System.currentTimeMillis()
+        // A switch with no loss in between (Wi-Fi to mobile data): playing just now counts too.
+        val wasPlaying = if (netLostAt > 0) playingAtLoss && now - netLostAt < 15 * 60_000L
+            else isPlaying || (lastPlayingAt > 0 && now - lastPlayingAt < 20_000L)
+        Logger.i(TAG, "network back after ${if (netLostAt > 0) (now - netLostAt) / 1000 else 0}s, checking the Spotify connection (play on=$wasPlaying)")
+        netLostAt = 0L
+        playingAtLoss = false
+        com.project.lol.util.NetworkState.notifyBack()
+        mainHandler.postDelayed({
+            keepAlive("net")
+            if (wasPlaying) player()?.evaluateJavascript("window.spoResumeSoon&&window.spoResumeSoon('network',90000)", null)
+        }, 2_000L)
     }
 
     private fun unregisterNetworkWatch() {
@@ -850,6 +892,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     override fun onDestroy() {
         SoundFx.release()
         releaseWakeLock()
+        setPlaybackWifiLock(false)
         releaseServerLocks()
         unregisterNetworkWatch()
         mainHandler.removeCallbacks(keepAliveTick)
@@ -1066,7 +1109,9 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             currentDuration = obj.optLong("duration", 0L)
             currentPosition = obj.optLong("position", 0L)
 
+            if (isPlaying) lastPlayingAt = System.currentTimeMillis()
             if (isPlaying) acquireWakeLock() else releaseWakeLock()
+            setPlaybackWifiLock(isPlaying)
 
             updatePlaybackState()
             updateMetadata()
@@ -1370,13 +1415,39 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         )
     }
 
+    /**
+     * Keeps the CPU up while music plays. Re-armed on every status update and keepalive tick
+     * (it used to be a one-shot 1 h lock, so long sessions lost it until the next song), and
+     * time-limited so it lapses by itself if the ticks ever stop.
+     */
     private fun acquireWakeLock() {
-        if (wakeLock?.isHeld != true) {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = pm.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "spotilol:media_playback"
-            ).apply { acquire(60 * 60 * 1000L) }
+        try {
+            val wl = wakeLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "spotilol:media_playback")
+                .also { it.setReferenceCounted(false); wakeLock = it }
+            wl.acquire(10 * 60_000L)
+        } catch (e: Exception) {
+            Logger.e(TAG, "wake lock failed", e)
+        }
+    }
+
+    /**
+     * Wi-Fi stays at full power while music plays, so the phone doesn't doze the radio with the
+     * screen off and starve the stream (Server Mode holds its own lock all the time).
+     */
+    @Suppress("DEPRECATION")
+    private fun setPlaybackWifiLock(on: Boolean) {
+        try {
+            if (on) {
+                val l = playWifiLock ?: (applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager)
+                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "spotios:playback")
+                    .also { it.setReferenceCounted(false); playWifiLock = it }
+                if (!l.isHeld) l.acquire()
+            } else {
+                playWifiLock?.let { if (it.isHeld) it.release() }
+            }
+        } catch (e: Exception) {
+            Logger.e(TAG, "playback wifi lock failed", e)
         }
     }
 

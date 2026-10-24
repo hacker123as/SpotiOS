@@ -10,6 +10,7 @@ import android.widget.Toast
 import com.project.lol.R
 import com.project.lol.service.MediaNotificationService
 import com.project.lol.service.ServerMode
+import com.project.lol.webview.PlayerHost
 import com.project.lol.webview.helpers.AdIdStore
 import org.json.JSONArray
 import org.json.JSONObject
@@ -89,6 +90,14 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     fun serverStatus(): String {
         val ctx = appContext() ?: return "{}"
         return ServerMode.statusJson(ctx)
+    }
+
+    /** PlaybackGuard: true once after the player was rebuilt while music played (the page crashed). */
+    @JavascriptInterface
+    fun takeResume(): Boolean {
+        val want = PlayerHost.resumeOnLoad
+        PlayerHost.resumeOnLoad = false
+        return want
     }
 
     /** Read at document start, before the Server screen loads (ConnectKeepAlive keeps the page visible). */
