@@ -1,8 +1,7 @@
 name: Build SpotiOS APK
 
+# Manual only: run it from the Actions tab (Run workflow) when you want a new APK.
 on:
-  push:
-    branches: [main, "claude/**"]
   workflow_dispatch:
 
 permissions:
@@ -129,6 +128,8 @@ jobs:
         with:
           name: SpotiOS-apk
           path: ${{ steps.apk.outputs.file }}
+          # The APK is also attached to the release below, so keep this copy for a day only.
+          retention-days: 1
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
