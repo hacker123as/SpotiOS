@@ -51,6 +51,10 @@ class SpotifyWatcher : NotificationListenerService() {
     override fun onListenerDisconnected() {
         main.removeCallbacks(closedCheck)
         super.onListenerDisconnected()
+        // Android unbinds listeners now and then (memory, long idle); without asking to be bound
+        // again, SpotiOS stopped noticing Spotify until the phone restarted.
+        runCatching { NotificationListenerService.requestRebind(android.content.ComponentName(this, SpotifyWatcher::class.java)) }
+            .onFailure { Logger.w(TAG, "rebind failed: ${it.javaClass.simpleName}") }
     }
 
     private fun seen() {

@@ -249,6 +249,27 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             mainHandler.postDelayed(this, KEEPALIVE_MS)
         }
     }
+    /** Server Mode: notices the Spotify app opening on this phone (needs usage access). */
+    private val openWatch by lazy { SpotifyOpenWatch(this, mainHandler) { onSpotifyOpened() } }
+    private var screenWatchOn = false
+    /**
+     * Server Mode: screen on and unlock are when Spotify gets opened, so the open watch only runs
+     * with the screen on, and an unlock checks right away that SpotiOS is still connected (a
+     * long idle with the screen off is when the connection goes stale).
+     */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (!serverOn) return
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> openWatch.stop()
+                Intent.ACTION_SCREEN_ON -> openWatch.start()
+                Intent.ACTION_USER_PRESENT -> {
+                    openWatch.start()
+                    serverCheck("wake")
+                }
+            }
+        }
+    }
     private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var lastWidgetPushAt = 0L
 
@@ -469,11 +490,57 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
 
     /** The Spotify app just showed its notification: check now whether to take the music over. */
     fun onSpotifySeen() {
-        mainHandler.post {
-            PlayerHost.keepVisible()
-            player()?.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('spotify')", null)
+        mainHandler.post { serverCheck("spotify") }
+    }
+
+    /** SpotifyOpenWatch: the Spotify app came to the front. Take its music over, even before it plays. */
+    private fun onSpotifyOpened() {
+        serverCheck("open")
+    }
+
+    /**
+     * Wakes the server's page up and has it look at Spotify Connect now ([reason]: spotify, open
+     * or wake): checks its own connection, then watches for this phone's Spotify for a few seconds.
+     */
+    private fun serverCheck(reason: String) {
+        if (!ServerMode.isOn(this)) return
+        refreshServerLocks()
+        val wv = player()
+        if (wv == null) {
+            ensurePlayer(reason)
+            return
+        }
+        PlayerHost.keepVisible()
+        wv.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('$reason')", null)
+    }
+
+    private fun setScreenWatch(on: Boolean) {
+        if (on == screenWatchOn) {
+            if (on && isScreenOn()) openWatch.start()
+            return
+        }
+        screenWatchOn = on
+        if (on) {
+            val f = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(screenReceiver, f, RECEIVER_EXPORTED)
+                else registerReceiver(screenReceiver, f)
+            } catch (e: Exception) {
+                Logger.e(TAG, "screen receiver failed", e)
+            }
+            if (isScreenOn()) openWatch.start()
+        } else {
+            try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
+            openWatch.stop()
         }
     }
+
+    private fun isScreenOn(): Boolean =
+        runCatching { (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive }.getOrDefault(false)
 
     /** SpotifyWatcher: the Spotify app on this phone was closed (its notification went away). */
     fun onSpotifyClosed() {
@@ -493,6 +560,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         mainHandler.post {
             serverOn = false
             releaseServerLocks()
+            setScreenWatch(false)
             unregisterNetworkWatch()
             mainHandler.removeCallbacks(keepAliveTick)
             if (PlayerHost.isHeadless) {
@@ -520,11 +588,13 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         serverOn = on
         if (on) {
             refreshServerLocks()
+            setScreenWatch(true)
             ServerWatchdog.schedule(this)
             if (changed) Logger.i(TAG, "server mode on")
             ensurePlayer("server on")
         } else {
             releaseServerLocks()
+            setScreenWatch(false)
             ServerWatchdog.cancel(this)
             if (changed) Logger.i(TAG, "server mode off")
             if (PlayerHost.isHeadless) {
@@ -599,6 +669,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     private fun keepAlive(reason: String) {
         val server = ServerMode.isOn(this)
         if (server) refreshServerLocks()
+        // Usage access may have been given since: start watching for Spotify opening.
+        if (server && screenWatchOn && !openWatch.isRunning && isScreenOn()) openWatch.start()
         val wv = player()
         if (wv == null) {
             if (server) ensurePlayer("keepalive")
@@ -894,6 +966,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         releaseWakeLock()
         setPlaybackWifiLock(false)
         releaseServerLocks()
+        setScreenWatch(false)
         unregisterNetworkWatch()
         mainHandler.removeCallbacks(keepAliveTick)
         if (PlayerHost.headless === headlessHooks) PlayerHost.headless = null

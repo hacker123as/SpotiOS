@@ -15,6 +15,11 @@
     <!-- Server Mode starts when the phone starts. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Server Mode take-over: notice the Spotify app opening (SpotifyOpenWatch). The user grants
+         it in Settings > Usage access; nothing else reads app usage. -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />

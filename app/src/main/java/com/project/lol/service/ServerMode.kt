@@ -158,6 +158,25 @@ object ServerMode {
         return Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
     }
 
+    /** Usage access: lets SpotifyOpenWatch see the Spotify app come to the front, before it plays. */
+    fun hasUsageAccess(context: Context): Boolean = runCatching {
+        val ops = context.getSystemService(android.app.AppOpsManager::class.java)
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ops.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            ops.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+        }
+        mode == android.app.AppOpsManager.MODE_ALLOWED
+    }.getOrDefault(false)
+
+    /** The system page where SpotiOS can be given usage access (straight to SpotiOS where the phone allows). */
+    fun usageAccessIntent(context: Context): Intent {
+        val direct = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, android.net.Uri.parse("package:" + context.packageName))
+        if (runCatching { direct.resolveActivity(context.packageManager) }.getOrNull() != null) return direct
+        return Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+    }
+
     fun isLoggedIn(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("LoggedIn", false)
 
@@ -251,6 +270,7 @@ object ServerMode {
         o.put("withSpotify", startWithSpotify(context))
         o.put("onBoot", startOnBoot(context))
         o.put("notifAccess", hasNotificationAccess(context))
+        o.put("usageAccess", hasUsageAccess(context))
         o.put("spotifyInstalled", runCatching { context.packageManager.getPackageInfo(SPOTIFY_PACKAGE, 0); true }.getOrDefault(false))
         o.put("model", Build.MODEL ?: "")
         o.put("phoneName", runCatching { Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) }.getOrNull() ?: "")

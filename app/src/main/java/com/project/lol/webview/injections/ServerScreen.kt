@@ -495,8 +495,14 @@ function setDef(d,auto,why_){
 function autoDefault(){
   if(cfg.def&&!cfg.def.auto)return;
   for(var i=0;i<S.devices.length;i++)if(isThisPhone(S.devices[i])){setDef(S.devices[i],true,'this phone');return;}
+  /* not set yet and the only phone on the account: that's this one (its Spotify name can differ from the phone's) */
+  if(!cfg.def){
+    var ph=S.devices.filter(function(d){return d.id&&!isMine(d)&&normType(d.type)==='smartphone';});
+    if(ph.length===1){setDef(ph[0],true,'the only phone');return;}
+  }
   var a=S.active;
-  if(a&&S.playing&&now()-S.spSeen<15000&&!isMine(a)&&normType(a.type)==='smartphone')setDef(a,true,'this phone');
+  /* a phone that just became active right after Spotify was seen or opened on this phone */
+  if(a&&now()-S.spSeen<15000&&!isMine(a)&&normType(a.type)==='smartphone')setDef(a,true,'this phone');
 }
 function allowed(d){
   if(!d||isDef(d))return true;
@@ -509,7 +515,7 @@ function allowed(d){
 
 /* ---------- Connect state: pushed by Spotify over the player's own connection ---------- */
 var S={active:null,playing:false,devices:[],mineAt:0,hold:null,pullAt:0,pullUntil:0,fails:0,localUntil:0,pollAt:0,bounceAt:0,
-  gap:0,pulling:false,spSeen:0,dropT:null};
+  gap:0,pulling:false,spSeen:0,dropT:null,stuck:0,huntUntil:0,huntT:null};
 function fromCluster(c){
   var devs=c.devices||{},list=[];
   for(var k in devs){var d=devs[k]||{};list.push({id:d.device_id||k,name:d.name||'',type:d.device_type||'',vol:d.volume});}
@@ -551,7 +557,7 @@ function onState(a,playing,list){
     /* remembered across restarts of the page, for taking a dropped session back */
     if(a&&isMine(a)){var lp=playing?now():0;if(!lp!==!cfg.lastPlay||lp-(cfg.lastPlay||0)>30000)cfg.lastPlay=lp;}
   }
-  if(a&&isMine(a))S.mineAt=now();
+  if(a&&isMine(a)){S.mineAt=now();S.stuck=0;}
   save();
   autoConnect();
   if(shown){renderOn();renderDevs();}
@@ -597,33 +603,59 @@ function connected(from){
 function transferTo(id,mode){
   return either(
     function(){return csCall(function(c){return c.transfer(id,mode||'resume');});},
-    function(){return api('/me/player',{method:'PUT',body:{device_ids:[id],play:mode!=='pause'}});});
+    function(){return api('/me/player',{method:'PUT',body:{device_ids:[id],play:!mode||mode==='resume'}});});
 }
-/* Take-over: the default device started playing, so bring the music to SpotiOS, right away and every time. */
+/* Take-over: the default device became the active one (playing, or just opened and paused),
+   so bring the music to SpotiOS, right away and every time. A paused session comes over
+   paused: pressing play in Spotify then plays it on SpotiOS. */
 function takesFrom(a){return !!cfg.auto&&!!a&&!isMine(a)&&isDef(a);}
 var acT=null;
 function autoConnect(){
   clearTimeout(acT);acT=null;
   if(!W.__spoServer||W.__spoStopping||S.pulling)return;
   var a=S.active;
-  if(!a||!S.playing||!takesFrom(a))return;
+  if(!a||!takesFrom(a))return;
   var id=myId(),wait=Math.max(S.pullUntil-now(),S.pullAt+S.gap-now(),id?0:1000);
   if(wait>0){acT=setTimeout(autoConnect,wait+50);return;}
+  var playing=S.playing;
   S.pulling=true;S.pullAt=now();S.localUntil=now()+10000;
   var name=a.name||'your default device';
-  if(!S.fails)log('Took the music over from '+name,'good');
-  transferTo(id,'resume').then(function(){
-      S.pulling=false;S.fails=0;S.gap=2500;
-      toast('Now playing on SpotiOS');setTimeout(function(){poll(true);},1500);
-      /* still shown as playing there a moment later (a missed update): check again */
+  if(!S.fails&&!S.stuck)log((playing?'Took the music over from ':'Spotify opened on ')+name+(playing?'':', so SpotiOS took over'),'good');
+  transferTo(id,playing?'resume':'restore').then(function(){
+      S.pulling=false;S.fails=0;
+      /* Spotify said yes but still shows it there (a missed update, or it didn't move):
+         look again soon, then less and less often. */
+      S.stuck++;
+      S.gap=S.stuck<4?2500:Math.min(30000,2500*Math.pow(2,S.stuck-3));
+      if(S.stuck===1)toast(playing?'Now playing on SpotiOS':'SpotiOS took over. Press play in Spotify.');
+      setTimeout(function(){poll(true);},1500);
       acT=setTimeout(autoConnect,S.gap+100);
     }).catch(function(e){
       S.pulling=false;S.fails++;
       S.gap=Math.min(30000,retryWait(e,S.fails-1));
       if(S.fails===1)log('Couldn’t take over from '+name+' yet. Trying again.','bad');
-      if(!retryable(e)){S.fails=0;S.gap=0;S.pullUntil=now()+60000;log('Couldn’t take over from '+name+': '+why(e),'bad');}
+      if(!retryable(e)){S.fails=0;S.gap=0;S.pullUntil=now()+(playing?60000:20000);log('Couldn’t take over from '+name+': '+why(e),'bad');}
       autoConnect();
     });
+}
+/* Spotify was just opened on this phone (or the screen unlocked): make sure SpotiOS is still
+   connected, then look at Spotify Connect every 2 s for a little while, so the take-over
+   happens the moment this phone's Spotify shows up, even if Spotify's own update is missed. */
+function hunt(ms){
+  S.huntUntil=Math.max(S.huntUntil,now()+ms);
+  if(S.huntT)return;
+  var step=function(){
+    S.huntT=null;
+    if(!W.__spoServer||now()>S.huntUntil)return;
+    var a=S.active;
+    if(a&&isMine(a)){S.huntUntil=0;return;}
+    if(W.spoCS&&W.spotAuthToken&&!S.pulling){
+      S.pollAt=now();
+      W.spoCS.cluster().catch(function(e){if(e&&e.status===429)S.huntUntil=0;});
+    }
+    S.huntT=setTimeout(step,2000);
+  };
+  step();
 }
 /* The Spotify app on this phone was closed: pause (SpotifyWatcher noticed its notification go). */
 W.spoSrvSpotifyClosed=function(){
@@ -637,7 +669,17 @@ W.spoSrvSpotifyClosed=function(){
   toast('Spotify was closed, so SpotiOS paused');
 };
 W.spoSrvTick=function(reason){if(!W.__spoServer)return;holdCheck();poll(reason==='net');autoDefault();autoConnect();warmEme();if(shown)netTick(reason==='net');};
-W.spoSrvCheck=function(reason){if(!W.__spoServer)return;if(reason==='spotify')S.spSeen=now();S.pollAt=0;poll(true);autoConnect();};
+W.spoSrvCheck=function(reason){
+  if(!W.__spoServer)return;
+  if(reason==='spotify'||reason==='open')S.spSeen=now();
+  var c=W.__spoConn;
+  try{if(c&&c.probe)c.probe();}catch(e){}
+  if(reason==='open'||reason==='wake'){S.pullUntil=0;S.stuck=0;}
+  if(reason==='open')hunt(30000);
+  else if(reason==='wake')hunt(12000);
+  else{S.pollAt=0;poll(true);}
+  autoConnect();
+};
 
 /* ---------- AdGuard, VPNs and Private DNS that block Spotify (util/NetCheck.kt) ---------- */
 var net={ok:true},netAt=0,netT=null;
@@ -898,7 +940,7 @@ function renderDef(){
       '<button class="ss-btn sm pri" data-a="pickdef">Choose</button></div>';
   }
   h+='<div class="ss-row"><div class="ss-ico'+(on?' g':'')+'">'+ic('cast')+'</div><div class="ss-tx"><b>Take over its music</b><small>'+
-    (on?'Whenever '+(d?esc(d.name):'your default device')+' plays, SpotiOS takes the music over right away, every time, and takes it back if the Spotify session drops.':'Off. SpotiOS only plays what you send to it.')+
+    (on?'Whenever Spotify on '+(d?esc(d.name):'your default device')+' opens or plays, SpotiOS takes the music over right away, every time, and takes it back if the Spotify session drops.':'Off. SpotiOS only plays what you send to it.')+
    '</small></div><button class="ss-sw'+(on?' on':'')+'" data-a="auto" aria-label="Take over its music"></button></div>'+
    '<div class="ss-note">Only the default device is taken over. Your computer, speakers and TVs play as usual.</div>';
   el.innerHTML=h;
@@ -928,7 +970,7 @@ function renderWho(){
 function renderDevs(){renderWho();renderDef();}
 function renderSet(){
   var el=byId('ss-set');if(!el)return;
-  var ws=!!info.withSpotify,na=!!info.notifAccess,ob=info.onBoot!==false;
+  var ws=!!info.withSpotify,na=!!info.notifAccess,ob=info.onBoot!==false,ua=!!info.usageAccess;
   var h='<div class="ss-h">'+ic('settings')+'Server</div>'+
    '<div class="ss-row"><div class="ss-ico'+(ob?' g':'')+'">'+ic('power')+'</div><div class="ss-tx"><b>Start when the phone starts</b><small>'+
      (ob?'The server starts by itself when the phone turns on and keeps running. Only Stop server stops it.':'Off. Open SpotiOS to start the server after a restart.')+
@@ -936,6 +978,10 @@ function renderSet(){
    '<div class="ss-row"><div class="ss-ico g">'+ic('spotify')+'</div><div class="ss-tx"><b>Start with Spotify</b><small>'+
      (ws&&!na?'Needs notification access so SpotiOS can notice Spotify. <u data-a="notif">Allow it</u>.':'When Spotify starts playing on this phone, SpotiOS starts too'+(cfg.auto?' and takes the music over':'')+'.')+
      (info.spotifyInstalled===false?' Spotify isn’t installed on this phone.':'')+'</small></div><button class="ss-sw'+(ws?' on':'')+'" data-a="withsp" aria-label="Start with Spotify"></button></div>'+
+   '<div class="ss-row"><div class="ss-ico '+(ua?'g':'y')+'">'+ic('spotify')+'</div><div class="ss-tx"><b>Take over when Spotify opens</b><small>'+
+     (ua?'The moment you open Spotify on this phone, SpotiOS takes over, before you press play.':
+      'Allow usage access so SpotiOS notices the moment you open Spotify, before you press play. Without it, SpotiOS takes over once Spotify plays or shows up as active.')+
+     '</small></div>'+(ua?'':'<button class="ss-btn sm pri" data-a="usage">Allow</button>')+'</div>'+
    '<div class="ss-row"><div class="ss-ico'+(cfg.pauseClose?' g':'')+'">'+ic('pausec')+'</div><div class="ss-tx"><b>Pause when Spotify closes</b><small>'+
      (cfg.pauseClose&&!na?'Needs notification access so SpotiOS can notice Spotify closing. <u data-a="notif">Allow it</u>.':
       cfg.pauseClose?'When you close the Spotify app on this phone, SpotiOS pauses the music.':'Off. The music keeps playing when Spotify is closed.')+
@@ -1381,6 +1427,7 @@ function action(a,b){
   if(a==='withsp'){var on=!info.withSpotify;try{AndBridge.setStartWithSpotify(on);}catch(e){}info.withSpotify=on;renderSet();
     if(on)toast(info.notifAccess?'SpotiOS starts when Spotify plays':'Allow notification access so SpotiOS can notice Spotify');return;}
   if(a==='notif'){try{AndBridge.openNotificationAccess();}catch(e){}return;}
+  if(a==='usage'){try{AndBridge.openUsageAccess();}catch(e){}return;}
   if(a==='battery'){try{AndBridge.openBatterySettings();}catch(e){}return;}
   if(a==='full'){openFull();return;}
   if(a==='normal'){openSheet('normal');return;}

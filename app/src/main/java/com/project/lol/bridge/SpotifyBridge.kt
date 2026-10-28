@@ -161,6 +161,16 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
         }
     }
 
+    /** Server screen > "Take over when Spotify opens": usage access for SpotifyOpenWatch. */
+    @JavascriptInterface
+    fun openUsageAccess() {
+        val activity = activityRef.get() ?: return
+        activity.runOnUiThread {
+            runCatching { activity.startActivity(ServerMode.usageAccessIntent(activity)) }
+                .onFailure { runCatching { activity.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)) } }
+        }
+    }
+
     @JavascriptInterface
     fun openBatterySettings() {
         val activity = activityRef.get() ?: return

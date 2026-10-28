@@ -25,7 +25,7 @@ object ConnectKeepAlive {
   if(window.__spoKA)return;window.__spoKA=1;
   var S={ws:null,lastMsg:0,lastOpen:0,lastClose:0,opened:0,reconnects:0,forced:0,since:Date.now(),
          myId:'',obs:'',tpId:'',fromId:'',spc:'',hdr:null,appVer:'',cluster:null,clusterAt:0,inCluster:false,
-         onCluster:[],pingAt:0,pullAt:0,missing:0,kickAt:0};
+         onCluster:[],pingAt:0,pullAt:0,missing:0,kickAt:0,tok:'',tokAt:0,tokKick:0,tokWait:null};
   window.__spoConn=S;
 
   /* ---------- Server Mode: the page always counts as visible ---------- */
@@ -112,6 +112,8 @@ object ConnectKeepAlive {
       var s=protocols===undefined?new Base(url):new Base(url,protocols);
       try{
         if(/dealer/i.test(String(url))){
+          /* The dealer is opened with the player's current login, so it's a fresh token. */
+          try{var at=String(url).match(/[?&]access_token=([^&]+)/);if(at&&at[1]){window.spotAuthToken='Bearer '+decodeURIComponent(at[1]);noteTok();}}catch(e){}
           if(S.ws&&S.ws!==s)S.reconnects++;
           S.ws=s;S.lastMsg=Date.now();
           s.addEventListener('open',function(){if(S.ws===s){S.lastOpen=Date.now();S.opened++;S.lastMsg=Date.now();}});
@@ -184,6 +186,45 @@ object ConnectKeepAlive {
     };
   }
 
+  /* ---------- the player's login token ----------
+     Spotify's tokens last an hour. The web player renews its own when it needs one, but a
+     server sitting idle for hours sends nothing, so the token SpotiOS holds can be expired
+     the moment Spotify is opened elsewhere, and the take-over then failed with 401. A new
+     dealer connection makes the player fetch a fresh token (seen above) and register again. */
+  function noteTok(){var t=window.spotAuthToken;if(t&&t!==S.tok){S.tok=t;S.tokAt=Date.now();}}
+  S.noteTok=noteTok;
+  S.freshTok=function(){
+    noteTok();
+    if(S.tokWait)return S.tokWait;
+    var old=S.tok,sock=S.ws;
+    if(sock&&sock.readyState===1&&Date.now()-S.tokKick>45000){
+      S.tokKick=Date.now();
+      try{sock.close(4004,'token');}catch(e){}
+      S.forced++;S.lastClose=Date.now();
+    }
+    S.tokWait=new Promise(function(res){
+      var t0=Date.now();
+      (function wait(){
+        noteTok();
+        if(S.tok&&S.tok!==old)return res(true);
+        if(Date.now()-t0>10000)return res(false);
+        setTimeout(wait,250);
+      })();
+    }).then(function(v){S.tokWait=null;return v;});
+    return S.tokWait;
+  };
+  /* Quick check that the connection still answers (Spotify opened, screen unlocked): ping it
+     and reconnect if nothing comes back within a few seconds. */
+  S.probe=function(){
+    var ws=S.ws;
+    if(!ws||ws.readyState!==1)return;
+    var t0=Date.now();
+    try{ws.send('{"type":"ping"}');S.pingAt=t0;}catch(e){}
+    setTimeout(function(){
+      if(S.ws===ws&&ws.readyState===1&&S.lastMsg<t0){try{ws.close(4005,'probe');}catch(e){}S.forced++;S.lastClose=Date.now();}
+    },5000);
+  };
+
   /* ---------- Spotify Connect commands, the web player's own way ---------- */
   function rid(){var s='';for(var i=0;i<32;i++)s+=(Math.random()*16|0).toString(16);return s;}
   function csHeaders(){
@@ -200,8 +241,9 @@ object ConnectKeepAlive {
     return h;
   }
   function csErr(code,status,retry){var e=new Error(code);e.status=status||0;e.retryAfter=retry||0;return e;}
-  function csReq(method,path,body){
+  function csReq(method,path,body,again){
     if(!window.spotAuthToken)return Promise.reject(csErr('signin'));
+    noteTok();
     if(navigator.onLine===false)return Promise.reject(csErr('offline'));
     var base=S.spc||'https://spclient.wg.spotify.com';
     var init={method:method,headers:csHeaders()};
@@ -209,6 +251,10 @@ object ConnectKeepAlive {
     return Promise.resolve(window.fetch(base+'/connect-state/v1/'+path,init)).then(function(r){
       if(!r)throw csErr('network');
       if(r.status===429){var ra=0;try{ra=+(r.headers&&r.headers.get&&r.headers.get('retry-after'))||0;}catch(e){}throw csErr('http429',429,ra);}
+      if(r.status===401&&!again){
+        /* expired login: get a fresh one, then send it once more */
+        return S.freshTok().then(function(){return csReq(method,path,body,true);});
+      }
       if(r.status<200||r.status>=300)throw csErr('http'+r.status,r.status);
       return r.text().then(function(t){try{return t?JSON.parse(t):null;}catch(e){return null;}});
     });
@@ -314,6 +360,13 @@ object ConnectKeepAlive {
         }
       }).catch(function(){});
     }
+    /* In Server Mode, renew a token that has gone unchanged for about an hour before anyone
+       needs it, unless SpotiOS is the one playing (the player renews it itself then). */
+    noteTok();
+    if(server&&onPlayer&&online&&!did&&st===1&&S.tokAt&&now-S.tokAt>58*60000&&now-S.tokKick>10*60000&&!playing()){
+      var cl=S.cluster,me=noteId();
+      if(!(cl&&me&&cl.active_device_id===me)){did='token';S.freshTok();}
+    }
     try{if(typeof window.spoSrvTick==='function')window.spoSrvTick(reason||'tick');}catch(e){}
     var id=noteId();
     return JSON.stringify({
@@ -322,7 +375,7 @@ object ConnectKeepAlive {
       did:did,signedIn:onPlayer||location.hostname.indexOf('accounts.')!==0,token:!!window.spotAuthToken,
       myId:id,listed:!!(id&&S.inCluster&&S.clusterAt&&now-S.clusterAt<10*60000),
       name:window.__spoDeviceName||'SpotiOS',clusterAgo:S.clusterAt?now-S.clusterAt:-1,
-      upFor:now-S.since
+      upFor:now-S.since,tokAgo:S.tokAt?now-S.tokAt:-1
     });
   };
 })();
