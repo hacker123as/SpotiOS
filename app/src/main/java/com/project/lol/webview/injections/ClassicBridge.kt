@@ -16,7 +16,27 @@ object ClassicBridge {
                     var f = nfWait[id];
                     if(f){ delete nfWait[id]; f(raw); }
                 };
+                /* SpoNet: the origin-checked channel (PlayerHost). When it's there, AndBridge's
+                   nFetch/nFetchAsync refuse, so it is used first. */
+                var net = window.SpoNet;
+                if(net && !net.__spoHooked){
+                    net.__spoHooked = 1;
+                    net.addEventListener('message', function(ev){
+                        try { var m = JSON.parse(ev.data); if(window.__nfCb) window.__nfCb(m.id, m.raw); } catch(e){}
+                    });
+                }
                 function nativeRaw(url, optsJson){
+                    if(window.SpoNet && typeof window.SpoNet.postMessage === 'function'){
+                        return new Promise(function(resolve){
+                            var id = nfPre + (++nfSeq);
+                            var guard = setTimeout(function(){
+                                if(nfWait[id]){ delete nfWait[id]; resolve('{"status":0,"body":"timeout","headers":{}}'); }
+                            }, 30000);
+                            nfWait[id] = function(raw){ clearTimeout(guard); resolve(raw); };
+                            try { window.SpoNet.postMessage(JSON.stringify({id: id, url: String(url), opts: optsJson})); }
+                            catch(e){ delete nfWait[id]; clearTimeout(guard); resolve('{"status":0,"body":"bridge","headers":{}}'); }
+                        });
+                    }
                     if(typeof AndBridge.nFetchAsync !== 'function') return Promise.resolve(AndBridge.nFetch(url, optsJson));
                     return new Promise(function(resolve){
                         var id = nfPre + (++nfSeq);

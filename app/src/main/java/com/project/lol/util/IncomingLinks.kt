@@ -75,7 +75,8 @@ object IncomingLinks {
 
     private fun scriptFrom(uri: Uri, type: String?): String? {
         val scheme = uri.scheme?.lowercase() ?: return null
-        if (scheme == "content" || scheme == "file") {
+        // content: only. A file: path would let another app point the installer at SpotiOS's own files.
+        if (scheme == "content") {
             val name = uri.lastPathSegment.orEmpty().lowercase()
             val js = type?.contains("javascript") == true || name.endsWith(".js")
             return if (js) uri.toString() else null

@@ -145,6 +145,19 @@ object PlayerHost {
         }
 
         wv.addJavascriptInterface(bridge, "AndBridge")
+        // Native requests (no CORS, Spotify's cookies) go over a channel WebView only gives
+        // Spotify's own page, not AndBridge, which every frame and site in this WebView can see.
+        bridge.secureNet = false
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            try {
+                WebViewCompat.addWebMessageListener(wv, "SpoNet", setOf("https://open.spotify.com")) { _, message, _, isMainFrame, reply ->
+                    bridge.onNetMessage(message.data, isMainFrame, reply)
+                }
+                bridge.secureNet = true
+            } catch (e: Exception) {
+                Logger.e(TAG, "SpoNet channel not available", e)
+            }
+        }
         wv.webChromeClient = SpotifyWebChromeClient(
             onProgressChanged = { p -> currentOwner()?.onPlayerProgress(p) },
             onShowCustomView = { v, cb ->

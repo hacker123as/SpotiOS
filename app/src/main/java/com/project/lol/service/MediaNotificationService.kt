@@ -1,5 +1,6 @@
 package com.project.lol.service
 
+import org.json.JSONObject
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -68,6 +69,25 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         private const val NOTIFICATION_ID = 1
         private val mainHandler = Handler(Looper.getMainLooper())
         private const val MEDIA_ID_ROOT = "__ROOT__"
+        private const val MEDIA_ID_EMPTY = "__EMPTY__"
+        private val TRUSTED_BROWSERS = setOf(
+            "com.google.android.projection.gearhead",       // Android Auto
+            "com.google.android.carassistant",
+            "com.google.android.googlequicksearchbox",      // Assistant
+            "com.google.android.apps.googleassistant",
+            "com.google.android.apps.bard",                  // Gemini
+            "com.google.android.wearable.app",               // Wear OS companion
+            "com.google.android.apps.wear.companion",
+            "com.android.systemui",
+            "com.android.bluetooth",
+            "com.google.android.bluetooth",
+            "com.samsung.android.app.watchmanager",
+            "com.samsung.android.bixby.agent",
+        )
+        private val TRUSTED_BROWSER_PREFIXES = listOf(
+            "com.android.car.",                              // Android Automotive media centre
+            "com.google.android.car.",
+        )
 
         const val ACTION_PLAY_PAUSE = "com.project.lol.ACTION_PLAY_PAUSE"
         const val ACTION_NEXT = "com.project.lol.ACTION_NEXT"
@@ -316,8 +336,9 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     }
 
     private val remoteOutputTypes = intArrayOf(
+        // Not TYPE_BLUETOOTH_SCO: that's call audio. A watch or car kit that only does calls
+        // shows up as SCO, and it going out of range paused the music on the phone speaker.
         AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
         AudioDeviceInfo.TYPE_BLE_HEADSET,
         AudioDeviceInfo.TYPE_BLE_SPEAKER,
         AudioDeviceInfo.TYPE_HEARING_AID,
@@ -329,11 +350,28 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     )
 
     private val knownRouteIds = mutableSetOf<Int>()
+    /** Android 13+: the outputs music actually goes to, as last seen (before a removal). */
+    private val mediaRouteIds = mutableSetOf<Int>()
+
+    private fun refreshMediaRoute() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        runCatching {
+            val attrs = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            val ids = getSystemService(AudioManager::class.java).getAudioDevicesForAttributes(attrs).map { it.id }
+            mediaRouteIds.clear()
+            mediaRouteIds.addAll(ids)
+        }
+    }
     private var lastAutoPauseAt = 0L
     private var lastAutoResumeAt = 0L
 
     private val audioRouteCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
+            // Android switches the music to the new output a moment later.
+            mainHandler.postDelayed({ refreshMediaRoute() }, 1_500L)
             val fresh = addedDevices.filter { knownRouteIds.add(it.id) }
             if (fresh.isEmpty()) return
             val prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
@@ -344,10 +382,18 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
 
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
             knownRouteIds.removeAll(removedDevices.map { it.id }.toSet())
+            val wasRoute = mediaRouteIds.toSet()
+            refreshMediaRoute()
             if (!isPlaying) return
             val prefs = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
             if (!prefs.getBoolean("BtAutoPause", true)) return
             if (removedDevices.none { isRemoteOutput(it.type) }) return
+            // Android 13+: only when the music was really playing through what went away
+            // (not a second Bluetooth device that was merely connected).
+            if (wasRoute.isNotEmpty() && removedDevices.none { it.id in wasRoute }) {
+                btLog("route removed but music wasn't on it: " + removedDevices.joinToString("/") { it.type.toString() })
+                return
+            }
             val stillRemote = getSystemService(AudioManager::class.java)
                 .getDevices(AudioManager.GET_DEVICES_OUTPUTS)
                 .any { isRemoteOutput(it.type) }
@@ -511,7 +557,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             return
         }
         PlayerHost.keepVisible()
-        wv.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck('$reason')", null)
+        wv.evaluateJavascript("window.spoSrvCheck&&window.spoSrvCheck(${JSONObject.quote(reason)})", null)
     }
 
     private fun setScreenWatch(on: Boolean) {
@@ -666,9 +712,19 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
      * player alive. Spotify's own pings run on page timers that Android slows down in the
      * background; this tick runs regardless, so SpotiOS stays in other devices' lists.
      */
+    private var lastCookieFlush = 0L
+
     private fun keepAlive(reason: String) {
         val server = ServerMode.isOn(this)
         if (server) refreshServerLocks()
+        refreshMediaRoute()
+        // Spotify renews its login cookies now and then; WebView writes them to disk lazily, and
+        // if Android killed SpotiOS before that, the server came back logged out.
+        val t = System.currentTimeMillis()
+        if (t - lastCookieFlush > 5 * 60_000L) {
+            lastCookieFlush = t
+            runCatching { android.webkit.CookieManager.getInstance().flush() }
+        }
         // Usage access may have been given since: start watching for Spotify opening.
         if (server && screenWatchOn && !openWatch.isRunning && isScreenOn()) openWatch.start()
         val wv = player()
@@ -749,7 +805,9 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         } catch (e: Exception) {
             Logger.e(TAG, "server wake lock failed", e)
         }
-        if (wifiLock == null && Build.VERSION.SDK_INT < 34) {
+        // Every Android version: without it the Wi-Fi radio dozes with the screen off and the
+        // Spotify Connect socket times out (it was skipped on Android 14+).
+        if (wifiLock == null) {
             try {
                 val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
                 @Suppress("DEPRECATION")
@@ -877,6 +935,12 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         val andAuto = getSharedPreferences("spotilol_prefs", MODE_PRIVATE)
             .getBoolean("AndAuto", true)
         if (!andAuto) return null
+        if (!trustedBrowser(clientPackageName, clientUid)) {
+            // Any installed app can bind here. Unknown ones may still use the media controls,
+            // but don't get to read the Spotify library.
+            Logger.i(TAG, "media browser: $clientPackageName gets the empty root")
+            return BrowserRoot(MEDIA_ID_EMPTY, null)
+        }
         val extras = Bundle().apply {
             putBoolean("android.media.browse.SEARCH_SUPPORTED", true)
             putBoolean("android.media.browse.CONTENT_STYLE_SUPPORTED", true)
@@ -890,6 +954,10 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         parentId: String,
         result: Result<MutableList<MediaBrowserCompat.MediaItem>>
     ) {
+        if (parentId == MEDIA_ID_EMPTY || !currentCallerTrusted()) {
+            result.sendResult(mutableListOf())
+            return
+        }
         if (parentId == MEDIA_ID_ROOT) {
             val items = mutableListOf<MediaBrowserCompat.MediaItem>()
             items.add(createBrowsableItem(MEDIA_ID_PLAYLISTS, getString(com.project.lol.R.string.aa_playlists)))
@@ -906,10 +974,27 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         }
         result.detach()
         pendingCallbacks[parentId] = result
-        wakeAndRun("if (typeof window.fetchMediaItems === 'function') window.fetchMediaItems('$parentId');")
+        wakeAndRun("if (typeof window.fetchMediaItems === 'function') window.fetchMediaItems(${JSONObject.quote(parentId)});")
         Handler(Looper.getMainLooper()).postDelayed({
             pendingCallbacks.remove(parentId)?.sendResult(mutableListOf())
         }, 20000L)
+    }
+
+    /**
+     * Who may browse the library and search through the media browser: SpotiOS itself, the
+     * system, Android Auto and the car/assistant/watch apps that show media. The browser is
+     * exported (Android Auto needs that), so without this any app could read the library.
+     */
+    private fun trustedBrowser(pkg: String?, uid: Int): Boolean {
+        if (uid == android.os.Process.myUid() || uid == android.os.Process.SYSTEM_UID) return true
+        if (pkg == null) return false
+        if (pkg in TRUSTED_BROWSERS) return true
+        return TRUSTED_BROWSER_PREFIXES.any { pkg.startsWith(it) }
+    }
+
+    private fun currentCallerTrusted(): Boolean {
+        val info = runCatching { currentBrowserInfo }.getOrNull() ?: return true
+        return trustedBrowser(info.packageName, info.uid)
     }
 
     private fun createBrowsableItem(id: String, title: String): MediaBrowserCompat.MediaItem {
@@ -930,13 +1015,13 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         extras: Bundle?,
         result: Result<MutableList<MediaBrowserCompat.MediaItem>>
     ) {
-        if (query.isEmpty()) {
+        if (query.isEmpty() || !currentCallerTrusted()) {
             result.sendResult(mutableListOf())
             return
         }
         result.detach()
         pendingSearchCallbacks[query] = result
-        wakeAndRun("if (typeof window.searchMediaItems === 'function') window.searchMediaItems('$query');")
+        wakeAndRun("if (typeof window.searchMediaItems === 'function') window.searchMediaItems(${JSONObject.quote(query)});")
     }
 
     private fun wakeAndRun(js: String) {
@@ -1069,9 +1154,9 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
             val context = lastActiveContextId
             if (context != null && mediaId != null) {
-                wakeAndRun("playFromUri('$mediaId', '$context');")
-            } else {
-                wakeAndRun("playFromUri('$mediaId');")
+                wakeAndRun("playFromUri(${JSONObject.quote(mediaId)}, ${JSONObject.quote(context)});")
+            } else if (mediaId != null) {
+                wakeAndRun("playFromUri(${JSONObject.quote(mediaId)});")
             }
         }
     }
@@ -1123,6 +1208,7 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
             knownRouteIds.clear()
             knownRouteIds.addAll(am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.id })
             am.registerAudioDeviceCallback(audioRouteCallback, mainHandler)
+            refreshMediaRoute()
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to register audio route callback", e)
         }

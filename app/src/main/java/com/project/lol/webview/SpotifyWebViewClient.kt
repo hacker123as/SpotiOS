@@ -52,6 +52,13 @@ class SpotifyWebViewClient(
             onUserScriptLink.invoke(uri.toString())
             return true
         }
+        // The player WebView carries AndBridge, so it only shows Spotify and the login pages.
+        // Any other site (a link in a podcast or playlist description) opens in the browser.
+        if ((scheme == "https" || scheme == "http") && request.isForMainFrame && !SafeNav.allowedInPlayer(uri.toString())) {
+            Logger.w(TAG, "external link opens in the browser: ${uri.host}")
+            view?.context?.let { SafeNav.openExternal(it, uri.toString()) }
+            return true
+        }
         return false
     }
 
@@ -99,6 +106,12 @@ class SpotifyWebViewClient(
 
         view.evaluateJavascript(LogoutCheck.CONTENT) { result ->
             Logger.d(TAG, "logout check: $result")
+            if (result == "\"in\"") LogoutGuard.clear()
+            if (result == "\"out\"" && !LogoutGuard.confirm()) {
+                Logger.w(TAG, "page says logged out, reloading once to make sure")
+                view.postDelayed({ runCatching { view.reload() } }, 3_000L)
+                return@evaluateJavascript
+            }
             if (result == "\"out\"") {
                 Logger.w(TAG, "session expired, back to login")
                 view.context.getSharedPreferences("spotilol_prefs", 0)

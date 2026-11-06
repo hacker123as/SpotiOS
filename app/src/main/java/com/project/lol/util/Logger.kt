@@ -112,7 +112,7 @@ object Logger {
     fun log(level: LogLevel, tag: String, message: String?, throwable: Throwable? = null) {
         val enabled = enabledFlag.get()
         if (!enabled && level.priority < LogLevel.WARN.priority) return
-        val text = (message ?: throwable?.message ?: "").take(MAX_MESSAGE)
+        val text = redact((message ?: throwable?.message ?: "").take(MAX_MESSAGE))
         val safeTag = tag.ifBlank { APP_TAG }
         if (enabled) {
             val entry = LogEntry(
@@ -136,6 +136,15 @@ object Logger {
             LogLevel.ERROR -> Log.e(safeTag, text, throwable)
         }
     }
+
+    private val SECRET_RX = Regex(
+        """(access_token=|Bearer\s+|sp_dc=|sp_key=|client-token["':=\s]+|Authorization["':=\s]+)[A-Za-z0-9._~%+/=-]{8,}""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** Logs get shared to debug problems: never put a Spotify login token or cookie in them. */
+    fun redact(text: String): String =
+        if (text.length < 12) text else SECRET_RX.replace(text) { it.groupValues[1] + "<hidden>" }
 
     fun v(tag: String, message: String, throwable: Throwable? = null) =
         log(LogLevel.VERBOSE, tag, message, throwable)

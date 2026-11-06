@@ -64,6 +64,37 @@ object PlaybackGuard {
       try{window.actPlayPause(true);}catch(e){}
     },2500);
   };
+  /* A stream that breaks mid-song (a CDN hiccup, a brief signal drop that never took the network
+     away) left the player paused for good: the network watch never fired, so nothing played on.
+     When the audio element itself reports an error while it was playing and the player ends up
+     paused with nobody asking for it, play on. */
+  var lastTrouble=0;
+  function mediaTrouble(m){
+    var t=Date.now();
+    if(!m.__spoOn||t-lastTrouble<60000)return;
+    lastTrouble=t;
+    log('w','audio error while playing');
+    setTimeout(function(){
+      if(playing()!==false||window.reqPause===true||window.__spoStopping)return;
+      if(Date.now()-(window.__spoRemoteCmdAt||0)<15000||otherDevice())return;
+      window.spoResumeSoon('stall',60000);
+    },4000);
+  }
+  function watchMedia(m){
+    if(!m||m.__spoW)return;m.__spoW=1;
+    m.addEventListener('playing',function(){m.__spoOn=true;});
+    m.addEventListener('pause',function(){m.__spoOn=false;});
+    m.addEventListener('ended',function(){m.__spoOn=false;});
+    m.addEventListener('error',function(){mediaTrouble(m);});
+  }
+  try{
+    var MP=window.HTMLMediaElement&&HTMLMediaElement.prototype;
+    if(MP&&typeof MP.play==='function'&&!MP.__spoPlayWrap){
+      var realPlay=MP.play;MP.__spoPlayWrap=1;
+      MP.play=function(){try{watchMedia(this);}catch(e){}return realPlay.apply(this,arguments);};
+    }
+  }catch(e){}
+
   window.spoMarkResume=function(){try{localStorage.setItem('spoResumeAt',String(Date.now()));}catch(e){}};
   function resumeOnLoad(){
     var at=0,nat=false;

@@ -45,6 +45,8 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
             Thread(r, "spo-nfetch").apply { isDaemon = true }
         }
         private val MAIN = Handler(Looper.getMainLooper())
+
+        fun allowedNativeUrl(url: String?): Boolean = NativeNet.allowed(url)
     }
 
     @Volatile private var activityRef = activityRef
@@ -539,12 +541,42 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
      * rest of the player (and the next request) while it waited. Returns false when there is no
      * player to answer to, and the page then falls back to nFetch.
      */
+    /**
+     * Set when the player got the origin-checked SpoNet channel ([onNetMessage]). The page then
+     * sends its native requests there, and the two AndBridge entry points below refuse: AndBridge
+     * is visible to every frame and every site the WebView shows, SpoNet only to Spotify's own page.
+     */
+    @Volatile var secureNet = false
+
+    /**
+     * A native request from Spotify's page over SpoNet. WebView only delivers these from
+     * https://open.spotify.com frames; [isMainFrame] rules out a Spotify page framed by someone
+     * else's. Answers {id, raw} on the same channel.
+     */
+    fun onNetMessage(data: String?, isMainFrame: Boolean, reply: androidx.webkit.JavaScriptReplyProxy) {
+        if (!isMainFrame || data.isNullOrEmpty()) return
+        val o = runCatching { JSONObject(data) }.getOrNull() ?: return
+        val id = o.optString("id")
+        val url = o.optString("url")
+        val opts = if (o.isNull("opts")) null else o.optString("opts")
+        try {
+            NET_POOL.execute {
+                val raw = doFetch(url, opts)
+                val msg = JSONObject().put("id", id).put("raw", raw).toString()
+                MAIN.post { runCatching { reply.postMessage(msg) } }
+            }
+        } catch (e: Exception) {
+            Logger.w(TAG, "SpoNet request not started: ${e.javaClass.simpleName}")
+        }
+    }
+
     @JavascriptInterface
     fun nFetchAsync(id: String, url: String, optsJson: String?): Boolean {
+        if (secureNet) return false
         val wv = com.project.lol.webview.PlayerHost.webView ?: return false
         return try {
             NET_POOL.execute {
-                val raw = nFetch(url, optsJson)
+                val raw = doFetch(url, optsJson)
                 val js = "window.__nfCb&&window.__nfCb(" + JSONObject.quote(id) + "," + JSONObject.quote(raw) + ")"
                 // Not wv.post: a View only runs posted work while it is on screen, and in Server
                 // Mode the player usually isn't.
@@ -562,6 +594,20 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
     @Suppress("unused")
     @JavascriptInterface
     fun nFetch(url: String, optsJson: String?): String {
+        if (secureNet) return "{\"status\":0,\"body\":\"use SpoNet\",\"headers\":{}}"
+        return doFetch(url, optsJson)
+    }
+
+    /**
+     * Sends [url] natively (no CORS, Spotify's cookies attached) for the web player. Only https
+     * requests to Spotify's own hosts: this is a way around the browser's same-origin rules, so
+     * it must not reach anything else.
+     */
+    private fun doFetch(url: String, optsJson: String?): String {
+        if (!allowedNativeUrl(url)) {
+            Logger.w(TAG, "nFetch refused: ${url.take(80)}")
+            return "{\"status\":0,\"body\":\"blocked\",\"headers\":{}}"
+        }
         val errorResult = { e: Exception ->
             try {
                 JSONObject().apply {

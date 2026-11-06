@@ -2,8 +2,10 @@
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
+            <!-- System CAs only: a CA someone installs on the phone (a "VPN" or filter app,
+                 work profile, malware) can't read or change SpotiOS's Spotify session or the
+                 update download. User CAs were for the old proxy/CA mode, retired in 2.3.0. -->
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
 </network-security-config>

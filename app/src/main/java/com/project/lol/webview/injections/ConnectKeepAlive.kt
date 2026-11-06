@@ -98,6 +98,9 @@ object ConnectKeepAlive {
     gunzip(p).then(function(t){if(t){try{emit(clusterOf(JSON.parse(t)));}catch(e){}}}).catch(function(){});
   }
   function onDealerText(d){
+    /* A command from another device (pause, skip...) arrives as a dealer "request". PlaybackGuard
+       must not undo a pause someone sent from their phone. */
+    if(/"type"\s*:\s*"request"/.test(d))window.__spoRemoteCmdAt=Date.now();
     if(d.indexOf('connect-state')===-1&&d.indexOf('cluster')===-1)return;
     var m;try{m=JSON.parse(d);}catch(e){return;}
     if(!m||String(m.uri||'').indexOf('cluster')===-1)return;

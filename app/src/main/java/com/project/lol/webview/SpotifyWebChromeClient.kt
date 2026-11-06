@@ -63,17 +63,6 @@ class SpotifyWebChromeClient(
                 url.startsWith("https://accounts.spotify.com/")
     }
 
-    private fun isOAuthUrl(url: String): Boolean {
-        val host = runCatching { url.toUri().host?.lowercase() }.getOrNull() ?: return false
-        return host == "google.com" ||
-                host.endsWith(".google.com") ||
-                host.indexOf(".google.") != -1 ||
-                host == "facebook.com" ||
-                host.endsWith(".facebook.com") ||
-                host == "appleid.apple.com" ||
-                host.endsWith(".apple.com")
-    }
-
     private fun isGoogleUrl(url: String): Boolean {
         val host = runCatching { url.toUri().host?.lowercase() }.getOrNull() ?: return false
         return host == "google.com" || host.endsWith(".google.com") || host.indexOf(".google.") != -1
@@ -118,9 +107,12 @@ class SpotifyWebChromeClient(
                 @Suppress("DEPRECATION")
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                     val targetUrl = url ?: return false
-                    val allowed = isSpotifyUrl(targetUrl) || isOAuthUrl(targetUrl)
+                    val allowed = isSpotifyUrl(targetUrl) || SafeNav.isSignIn(targetUrl)
                     if (!allowed) {
-                        Logger.w(TAG, "child window blocked: $targetUrl")
+                        // A link Spotify opens in a new tab (podcast notes, artist links): the browser.
+                        Logger.w(TAG, "child window link opens in the browser: ${runCatching { targetUrl.toUri().host }.getOrNull()}")
+                        val ctx = view?.context
+                        if (ctx != null && (targetUrl.startsWith("https://") || targetUrl.startsWith("http://"))) SafeNav.openExternal(ctx, targetUrl)
                         try { view?.destroy() } catch (_: Exception) {}
                         return true
                     }

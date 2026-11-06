@@ -1349,10 +1349,10 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
         }
         DownloadManager.onProgress = { pct, label ->
             runOnUiThread {
-                val safe = label.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
+                val safe = org.json.JSONObject.quote(label.replace('\n', ' '))
                 val batch = DownloadManager.isBatchActive()
                 webView?.evaluateJavascript(
-                    "window.__splDlBatch=$batch;window.splDownloadProgress($pct, '$safe')",
+                    "window.__splDlBatch=$batch;window.splDownloadProgress($pct, $safe)",
                     null
                 )
             }
@@ -1506,7 +1506,10 @@ class MainActivity : ComponentActivity(), PlayerHost.Owner {
             view.evaluateJavascript(js, null)
 
             view.evaluateJavascript(LogoutCheck.CONTENT) { result ->
-                if (result == "\"out\"") {
+                if (result == "\"in\"") com.project.lol.webview.LogoutGuard.clear()
+                if (result == "\"out\"" && !com.project.lol.webview.LogoutGuard.confirm()) {
+                    view.reload()
+                } else if (result == "\"out\"") {
                     prefs.edit().putBoolean("LoggedIn", false).apply()
                     view.loadUrl("https://accounts.spotify.com/login")
                 }
